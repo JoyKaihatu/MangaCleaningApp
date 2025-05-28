@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comic Translation - Edit</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/konva/8.4.3/konva.min.js"></script>
+    <style>
+        body { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            min-height: 100vh; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .edit-container { 
+            background: rgba(255, 255, 255, 0.98); 
+            border-radius: 20px; 
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15); 
+            margin: 1rem 0;
+            overflow: hidden;
+        }
+        
+        .header-section {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 1.5rem 2rem;
+        }
+        
+        .main-editor {
+            display: flex;
+            height: calc(100vh - 200px);
+            min-height: 600px;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background: #f8f9fa;
+            border-right: 2px solid #e9ecef;
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+        
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+        }
+        
+        .canvas-toolbar {
+            background: #e9ecef;
+            padding: 1rem;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .canvas-area {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f1f3f4;
+        }
+        
+        #konva-container {
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .tool-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .tool-btn:hover {
+            background: #f8f9fa;
+            border-color: #6c757d;
+        }
+        
+        .tool-btn.active {
+            background: #4f46e5;
+            color: white;
+            border-color: #4f46e5;
+        }
+        
+        .label-item {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .label-item:hover {
+            border-color: #4f46e5;
+            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.1);
+        }
+        
+        .label-item.selected {
+            border-color: #4f46e5;
+            background: #f0f0ff;
+        }
+        
+        .label-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+        
+        .image-nav {
+            background: white;
+            padding: 1rem;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .shape-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .shape-item {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .shape-item.selected {
+            border-color: #4f46e5;
+            background: #f0f0ff;
+        }
+        
+        .btn-primary { background: #4f46e5; border-color: #4f46e5; }
+        .btn-primary:hover { background: #3f37d1; border-color: #3f37d1; }
+        .btn-success { background: #10b981; border-color: #10b981; }
+        .btn-success:hover { background: #059669; border-color: #059669; }
+        .btn-danger { background: #ef4444; border-color: #ef4444; }
+        .btn-danger:hover { background: #dc2626; border-color: #dc2626; }
+        
+        .status-indicator {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .status-saved { background: #d1fae5; color: #065f46; }
+        .status-modified { background: #fef3c7; color: #92400e; }
+        
+        @media (max-width: 768px) {
+            .main-editor { flex-direction: column; height: auto; }
+            .sidebar { width: 100%; }
+            .canvas-toolbar { justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="edit-container">
+            <!-- Header -->
+            <div class="header-section">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="mb-1">
+                            <i class="fas fa-edit mr-2"></i>Comic Translation Editor
+                        </h2>
+                        <p class="mb-0 opacity-75">Edit bounding boxes and labels for detected elements</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="status-indicator status-saved" id="save-status">
+                            <i class="fas fa-check mr-1"></i>Saved
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Image Navigation -->
+            <div class="image-nav">
+                <div class="d-flex align-items-center">
+                    <button class="btn btn-outline-primary btn-sm mr-2" id="prev-image" disabled>
+                        <i class="fas fa-chevron-left mr-1"></i>Previous
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm" id="next-image">
+                        Next<i class="fas fa-chevron-right ml-1"></i>
+                    </button>
+                </div>
+                <div class="text-center">
+                    <h5 class="mb-0" id="current-image-name">Loading...</h5>
+                    <small class="text-muted" id="image-counter">Image 1 of 1</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-success btn-sm" id="save-current">
+                        <i class="fas fa-save mr-1"></i>Save Current
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="process-all">
+                        <i class="fas fa-magic mr-1"></i>Process All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Editor -->
+            <div class="main-editor">
+                <!-- Sidebar -->
+                <div class="sidebar">
+                    <!-- Drawing Tools -->
+                    <div class="mb-4">
+                        <h6 class="font-weight-bold mb-3">
+                            <i class="fas fa-tools mr-2"></i>Drawing Tools
+                        </h6>
+                        <div class="d-flex flex-column gap-2">
+                            <button class="tool-btn active" data-tool="select" id="select-tool">
+                                <i class="fas fa-mouse-pointer"></i>Select
+                            </button>
+                            <button class="tool-btn" data-tool="rectangle" id="rectangle-tool">
+                                <i class="fas fa-square"></i>Rectangle
+                            </button>
+                            <button class="tool-btn" data-tool="polygon" id="polygon-tool">
+                                <i class="fas fa-draw-polygon"></i>Polygon
+                            </button>
+                            <button class="tool-btn" data-tool="delete" id="delete-tool">
+                                <i class="fas fa-trash"></i>Delete Mode
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Labels -->
+                    <div class="mb-4">
+                        <h6 class="font-weight-bold mb-3">
+                            <i class="fas fa-tags mr-2"></i>Labels
+                        </h6>
+                        <div class="label-item selected" data-label="onomatope">
+                            <span class="label-color" style="background-color: #ef4444;"></span>
+                            <strong>Onomatopoeia</strong>
+                            <div class="text-muted small">Sound effects</div>
+                        </div>
+                        <div class="label-item" data-label="bubble">
+                            <span class="label-color" style="background-color: #3b82f6;"></span>
+                            <strong>Speech Bubble</strong>
+                            <div class="text-muted small">Dialogue containers</div>
+                        </div>
+                        <div class="label-item" data-label="text">
+                            <span class="label-color" style="background-color: #10b981;"></span>
+                            <strong>Text</strong>
+                            <div class="text-muted small">Other text elements</div>
+                        </div>
+                    </div>
+
+                    <!-- Shape List -->
+                    <div class="mb-4">
+                        <h6 class="font-weight-bold mb-3">
+                            <i class="fas fa-list mr-2"></i>Detected Shapes
+                        </h6>
+                        <div class="shape-list" id="shape-list">
+                            <!-- Shapes will be populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div>
+                        <h6 class="font-weight-bold mb-3">
+                            <i class="fas fa-cog mr-2"></i>Actions
+                        </h6>
+                        <button class="btn btn-outline-danger btn-sm btn-block mb-2" id="clear-all">
+                            <i class="fas fa-trash mr-1"></i>Clear All Shapes
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm btn-block" id="reset-image">
+                            <i class="fas fa-undo mr-1"></i>Reset to Original
+                        </button>
+                    </div>
+
+                        <!-- Visibility Filters -->
+                    <div class="mb-4" style="margin-top: 20px;">
+                        <h6 class="font-weight-bold mb-3">
+                            <i class="fas fa-eye mr-2"></i>Visibility
+                        </h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="toggle-all-visibility" checked>
+                            <label class="form-check-label" for="toggle-all-visibility">Show All Shapes</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input toggle-label-visibility" type="checkbox" data-label="onomatope" checked>
+                            <label class="form-check-label">Onomatopoeia</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input toggle-label-visibility" type="checkbox" data-label="bubble" checked>
+                            <label class="form-check-label">Speech Bubble</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input toggle-label-visibility" type="checkbox" data-label="text" checked>
+                            <label class="form-check-label">Text</label>
+                        </div>
+                    </div>
+                </div>
+
+                    
+
+                <!-- Canvas Area -->
+                <div class="canvas-container">
+                    <!-- Canvas Toolbar -->
+                    <div class="canvas-toolbar">
+                        <div class="d-flex align-items-center gap-3">
+                            <label class="mb-0">
+                                <strong>Zoom:</strong>
+                                <input type="range" id="zoom-slider" min="0.1" max="3" step="0.1" value="1" class="ml-2">
+                                <span id="zoom-value" class="ml-2">100%</span>
+                            </label>
+                            <button class="btn btn-outline-secondary btn-sm" id="fit-to-screen">
+                                <i class="fas fa-expand-arrows-alt mr-1"></i>Fit to Screen
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" id="actual-size">
+                                <i class="fas fa-search mr-1"></i>Actual Size
+                            </button>
+                        </div>
+                        <div class="ml-auto">
+                            <small class="text-muted">
+                                Current Label: <span class="font-weight-bold" id="current-label">Onomatopoeia</span>
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Canvas -->
+                    <div class="canvas-area">
+                        <div id="konva-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Global variables
+        let stage, layer, backgroundLayer;
+        let currentTool = 'select';
+        let currentLabel = 'onomatope';
+        let isDrawing = false;
+        let currentShape = null;
+        let polygonPoints = [];
+        let images = [];
+        let currentImageIndex = 0;
+        let shapesData = [];
+        let hasUnsavedChanges = false;
+        let undoStack = [];
+        let redoStack = [];
+        let labelVisibility = {
+            'onomatope': true,
+            'bubble': true,
+            'text': true
+        };
+        let showAllShapes = true;
+        const folder = "{{ folder }}";
+        const bubbleClassNames = {
+            0: 'Ellipse',
+            1: 'Cloud',
+            2: 'Other',
+            3: 'Rectangle',
+            4: 'Sea Urchin',
+            5: 'Thorn'
+        };
+        let selectedShapeIndex = null;
+        let undoHistoryPerImage = {}; 
+        let redoHistoryPerImage = {};
+
+
+
+
+        // Label colors
+        const labelColors = {
+            'onomatope': '#ef4444',
+            'bubble': '#3b82f6',
+            'text': '#10b981'
+        };
+
+        // Initialize the editor
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCanvas();
+            loadImages();
+            setupEventListeners();
+        });
+        document.getElementById('konva-container').addEventListener('wheel', e => e.preventDefault(), { passive: false });
+
+
+        // function initializeCanvas() {
+        //     const container = document.getElementById('konva-container');
+        //     const containerWidth = container.parentElement.clientWidth - 40;
+        //     const containerHeight = container.parentElement.clientHeight - 40;
+
+        //     stage = new Konva.Stage({
+        //         container: 'konva-container',
+        //         width: containerWidth,
+        //         height: containerHeight,
+        //         draggable: false
+        //     });
+
+        //     backgroundLayer = new Konva.Layer();
+        //     layer = new Konva.Layer();
+            
+        //     stage.add(backgroundLayer);
+        //     stage.add(layer);
+
+        //     // Handle canvas events
+        //     stage.on('click tap', handleStageClick);
+        //     stage.on('mousemove', handleMouseMove);
+        // }
+
+
+        // function saveState() {
+        //     // Push current state to undo stack
+        //     undoStack.push(JSON.stringify(shapesData));
+        //     // Clear redo stack on new action
+        //     redoStack = [];
+        // }
+
+        function saveState() {
+            const imageName = images[currentImageIndex];
+            if (!undoHistoryPerImage[imageName]) undoHistoryPerImage[imageName] = [];
+            if (!redoHistoryPerImage[imageName]) redoHistoryPerImage[imageName] = [];
+
+            undoHistoryPerImage[imageName].push(JSON.stringify(shapesData));
+            redoHistoryPerImage[imageName] = []; // clear redo on new action
+        }
+
+        // function undo() {
+        //     if (undoStack.length > 0) {
+        //         redoStack.push(JSON.stringify(shapesData));
+        //         const prevState = undoStack.pop();
+        //         shapesData = JSON.parse(prevState);
+        //         renderShapes();
+        //         updateShapeList();
+        //         markAsModified();
+        //     }
+        // }
+
+        function undo() {
+            const imageName = images[currentImageIndex];
+            const undoStack = undoHistoryPerImage[imageName] || [];
+            const redoStack = redoHistoryPerImage[imageName] || [];
+
+            if (undoStack.length === 0) return;
+
+            redoStack.push(JSON.stringify(shapesData));
+            const previousState = undoStack.pop();
+
+            try {
+                shapesData = JSON.parse(previousState);
+            } catch (err) {
+                console.error("Failed to parse undo state:", err);
+                return;
+            }
+
+            renderShapes();
+            updateShapeList();
+            markAsModified();
+        }
+
+
+        // function redo() {
+        //     if (redoStack.length > 0) {
+        //         undoStack.push(JSON.stringify(shapesData));
+        //         const nextState = redoStack.pop();
+        //         shapesData = JSON.parse(nextState);
+        //         renderShapes();
+        //         updateShapeList();
+        //         markAsModified();
+        //     }
+        // }
+
+        function redo() {
+            const imageName = images[currentImageIndex];
+            const undoStack = undoHistoryPerImage[imageName] || [];
+            const redoStack = redoHistoryPerImage[imageName] || [];
+
+            if (redoStack.length === 0) return;
+
+            undoStack.push(JSON.stringify(shapesData));
+            const nextState = redoStack.pop();
+
+            try {
+                shapesData = JSON.parse(nextState);
+            } catch (err) {
+                console.error("Failed to parse redo state:", err);
+                return;
+            }
+
+            renderShapes();
+            updateShapeList();
+            markAsModified();
+        }
+
+
+
+        function initializeCanvas() {
+            const container = document.getElementById('konva-container');
+            const containerWidth = container.parentElement.clientWidth - 40;
+            const containerHeight = container.parentElement.clientHeight - 40;
+
+            stage = new Konva.Stage({
+                container: 'konva-container',
+                width: containerWidth,
+                height: containerHeight,
+                draggable: false  // only drag when in "select" mode
+            });
+
+            backgroundLayer = new Konva.Layer();
+            layer = new Konva.Layer();
+
+            stage.add(backgroundLayer);
+            stage.add(layer);
+
+            // Add scroll/zoom/pan behavior here:
+            stage.container().addEventListener('wheel', function (e) {
+                e.preventDefault();
+
+                const scaleBy = 1.05;
+                const oldScale = stage.scaleX();
+                const pointer = getRelativePointerPosition(stage);
+
+                if (e.ctrlKey) {
+                    const direction = e.deltaY > 0 ? 1 : -1;
+                    const newScale = direction > 0 ? oldScale / scaleBy : oldScale * scaleBy;
+
+                    stage.scale({ x: newScale, y: newScale });
+
+                    const mousePointTo = {
+                        x: (pointer.x - stage.x()) / oldScale,
+                        y: (pointer.y - stage.y()) / oldScale,
+                    };
+
+                    const newPos = {
+                        x: pointer.x - mousePointTo.x * newScale,
+                        y: pointer.y - mousePointTo.y * newScale,
+                    };
+
+                    stage.position(newPos);
+                    stage.batchDraw();
+                    updateZoomControls();
+                } else if (e.shiftKey) {
+                    stage.x(stage.x() - e.deltaY);
+                    stage.batchDraw();
+                } else {
+                    stage.y(stage.y() - e.deltaY);
+                    stage.batchDraw();
+                }
+            });
+
+            // Prevent page scroll
+            document.getElementById('konva-container').addEventListener('wheel', e => e.preventDefault(), { passive: false });
+
+            // Handle canvas events
+            stage.on('click tap', handleStageClick);
+            stage.on('mousemove', handleMouseMove);
+        }
+
+
+        function loadImages() {
+            // This will be populated by Flask template
+            images = {{ files| tojson | safe }};
+            if (images.length > 0) {
+                loadCurrentImage();
+                updateImageNavigation();
+            }
+        }
+
+        function loadCurrentImage() {
+            if (images.length === 0) return;
+
+            const imageName = images[currentImageIndex];
+
+            if (!undoHistoryPerImage[imageName]) undoHistoryPerImage[imageName] = [];
+            if (!redoHistoryPerImage[imageName]) redoHistoryPerImage[imageName] = [];
+
+            document.getElementById('current-image-name').textContent = imageName;
+
+            // ✅ Pass imageName along to be used in callback
+            const imageUrl = `/uploads/${folder}/image/${imageName}`;
+            loadImageToCanvas(imageUrl, imageName);
+            markAsSaved();  // optionally move this to after annotations load
+        }
+
+
+        // function loadCurrentImage() {
+        //     if (images.length === 0) return;
+
+        //     const imageName = images[currentImageIndex];
+
+            
+        //     if (!undoHistoryPerImage[imageName]) undoHistoryPerImage[imageName] = [];
+        //     if (!redoHistoryPerImage[imageName]) redoHistoryPerImage[imageName] = [];
+        //     document.getElementById('current-image-name').textContent = imageName;
+            
+        //     // Load image
+        //     const imageUrl = `/uploads/{{ folder }}/image/${imageName}`;
+        //     loadImageToCanvas(imageUrl);
+            
+        //     // Load corresponding JSON data
+        //     loadImageAnnotations(imageName);
+        //     markAsSaved();
+        // }
+
+        let imageScale = 1;
+        let imageOffset = { x: 0, y: 0 };
+        let originalImageSize = { width: 0, height: 0 };  // for reverse mapping
+
+        function loadImageToCanvas(imageUrl, imageName) {
+            const imageObj = new Image();
+            imageObj.onload = function () {
+                backgroundLayer.destroyChildren();
+
+                const scale = Math.min(
+                    (stage.width() - 100) / this.naturalWidth,
+                    (stage.height() - 100) / this.naturalHeight
+                );
+
+                const xOffset = (stage.width() - this.naturalWidth * scale) / 2;
+                const yOffset = (stage.height() - this.naturalHeight * scale) / 2;
+
+                imageScale = scale;
+                imageOffset = { x: xOffset, y: yOffset };
+                originalImageSize = { width: this.naturalWidth, height: this.naturalHeight };
+
+                const konvaImage = new Konva.Image({
+                    x: xOffset,
+                    y: yOffset,
+                    image: imageObj,
+                    width: this.naturalWidth * scale,
+                    height: this.naturalHeight * scale,
+                });
+
+                backgroundLayer.add(konvaImage);
+                backgroundLayer.draw();
+                updateZoomControls();
+
+                // ✅ Only now load the annotations
+                loadImageAnnotations(imageName);
+            };
+            imageObj.src = imageUrl;
+        }
+
+        // function loadImageToCanvas(imageUrl) {
+        //     const imageObj = new Image();
+        //     imageObj.onload = function () {
+        //         backgroundLayer.destroyChildren();
+
+        //         const scale = Math.min(
+        //             (stage.width() - 100) / this.naturalWidth,
+        //             (stage.height() - 100) / this.naturalHeight
+        //         );
+
+        //         const xOffset = (stage.width() - this.naturalWidth * scale) / 2;
+        //         const yOffset = (stage.height() - this.naturalHeight * scale) / 2;
+
+        //         imageScale = scale;
+        //         imageOffset = { x: xOffset, y: yOffset };
+        //         originalImageSize = { width: this.naturalWidth, height: this.naturalHeight };
+
+        //         const konvaImage = new Konva.Image({
+        //             x: xOffset,
+        //             y: yOffset,
+        //             image: imageObj,
+        //             width: this.naturalWidth * scale,
+        //             height: this.naturalHeight * scale,
+        //         });
+
+        //         backgroundLayer.add(konvaImage);
+        //         backgroundLayer.draw();
+        //         updateZoomControls();
+        //     };
+        //     imageObj.src = imageUrl;
+        // }
+
+        function loadImageAnnotations(imageName) {
+            // Load JSON data for current image
+            fetch(`/get_annotations/{{ folder }}/${imageName}`)
+                .then(response => response.json())
+                .then(data => {
+                    shapesData = data.annotations || [];
+                    renderShapes();
+                    updateShapeList();
+                })
+                .catch(error => {
+                    console.log('No annotations found for this image:', error);
+                    shapesData = [];
+                    layer.destroyChildren();
+                    layer.draw();
+                    updateShapeList();
+                });
+            markAsSaved();
+        }
+
+                function renderShapes() {
+                    layer.destroyChildren();
+
+                    shapesData.forEach((shapeData, index) => {
+                        let shape;
+
+                        if (shapeData.type === 'rectangle') {
+                            shape = new Konva.Rect({
+                                x: shapeData.x * imageScale + imageOffset.x,
+                                y: shapeData.y * imageScale + imageOffset.y,
+                                width: shapeData.width * imageScale,
+                                height: shapeData.height * imageScale,
+                                stroke: labelColors[shapeData.label],
+                                strokeWidth: 2,
+                                fill: labelColors[shapeData.label] + '20',
+                                draggable: true,
+                                id: `shape_${index}`
+                            });
+                        } else if (shapeData.type === 'polygon') {
+                            const transformedPoints = shapeData.points.map((val, i) =>
+                                i % 2 === 0
+                                    ? val * imageScale + imageOffset.x  // x
+                                    : val * imageScale + imageOffset.y  // y
+                            );
+                            shape = new Konva.Line({
+                                points: transformedPoints,
+                                stroke: labelColors[shapeData.label],
+                                strokeWidth: 2,
+                                fill: labelColors[shapeData.label] + '20',
+                                closed: true,
+                                draggable: true,
+                                id: `shape_${index}`
+                            });
+                        }
+
+                        if (shape && labelVisibility[shapeData.label] && showAllShapes) {
+                            const transformer = new Konva.Transformer({
+                                node: shape,
+                                    enabledAnchors: [
+                                        'top-left', 'top-center', 'top-right',
+                                        'middle-left', 'middle-right',
+                                        'bottom-left', 'bottom-center', 'bottom-right'
+                                    ],
+                                boundBoxFunc: (oldBox, newBox) => {
+                                    newBox.width = Math.max(30, newBox.width);
+                                    newBox.height = Math.max(30, newBox.height);
+                                    return newBox;
+                                }
+                            });
+
+                            shape.on('click', () => selectShape(index));
+                            shape.on('transformend', function () {
+                                saveState();
+                                markAsModified();
+                            });
+
+                            shape.on('dragend', function () {
+                                saveState();
+                                markAsModified();
+                            });
+
+                            if (selectedShapeIndex !== null && index === selectedShapeIndex) {
+                                shape.strokeWidth(4);
+                                shape.shadowColor('black');
+                                shape.shadowBlur(10);
+                                shape.shadowOffset({ x: 0, y: 0 });
+                                shape.shadowOpacity(0.6);
+                            }
+
+                            layer.add(shape);
+                            layer.add(transformer);
+                        }
+                    });
+
+                    layer.draw();
+                }
+
+
+        function handleStageClick(e) {
+            // If clicking on empty area, deselect all
+            if (e.target === stage) {
+                deselectAllShapes();
+                return;
+            }
+
+            if (currentTool === 'rectangle') {
+                startDrawingRectangle(e);
+            } else if (currentTool === 'polygon') {
+                addPolygonPoint(e);
+            } else if (currentTool === 'delete') {
+                deleteShape(e);
+            }
+        }
+
+        function handleMouseMove(e) {
+            if (currentTool === 'rectangle' && isDrawing && currentShape) {
+                const pos = getRelativePointerPosition(stage);
+                const startPos = currentShape.attrs;
+                
+                currentShape.width(pos.x - startPos.x);
+                currentShape.height(pos.y - startPos.y);
+                layer.draw();
+            }
+        }
+
+        function getRelativePointerPosition(stage) {
+            const transform = stage.getAbsoluteTransform().copy();
+            transform.invert();
+            const pos = stage.getPointerPosition();
+            return transform.point(pos);
+        }
+
+
+        function startDrawingRectangle(e) {
+            if (isDrawing) {
+                // Finish current rectangle
+                finishRectangle();
+            } else {
+                // Start new rectangle
+                const pos = getRelativePointerPosition(stage);
+                currentShape = new Konva.Rect({
+                    x: pos.x,
+                    y: pos.y,
+                    width: 0,
+                    height: 0,
+                    stroke: labelColors[currentLabel],
+                    strokeWidth: 2,
+                    fill: labelColors[currentLabel] + '20',
+                });
+                
+                layer.add(currentShape);
+                isDrawing = true;
+            }
+        }
+
+        function finishRectangle() {
+            if (currentShape && currentShape.width() > 10 && currentShape.height() > 10) {
+                const shapeAttrs = currentShape.attrs;
+
+                const x = (shapeAttrs.x - imageOffset.x) / imageScale;
+                const y = (shapeAttrs.y - imageOffset.y) / imageScale;
+                const width = shapeAttrs.width / imageScale;
+                const height = shapeAttrs.height / imageScale;
+
+                const shapeData = {
+                    type: 'rectangle',
+                    label: currentLabel,
+                    x: x,
+                    y: y,
+                    width: width,
+                    height: height
+                };
+                
+                saveState();
+                shapesData.push(shapeData);
+                markAsModified();
+                updateShapeList();
+                renderShapes();
+            } else if (currentShape) {
+                currentShape.destroy();
+                layer.draw();
+            }
+
+            currentShape = null;
+            isDrawing = false;
+        }
+
+
+        function addPolygonPoint(e) {
+            const pos = getRelativePointerPosition(stage);
+            polygonPoints.push(pos.x, pos.y);
+            
+            // Visual feedback for polygon points
+            const circle = new Konva.Circle({
+                x: pos.x,
+                y: pos.y,
+                radius: 5,
+                fill: labelColors[currentLabel],
+                stroke: '#000',
+                strokeWidth: 1
+            });
+            
+            layer.add(circle);
+            layer.draw();
+        }
+
+        function finishPolygon() {
+            if (polygonPoints.length >= 6) { // At least 3 points (x,y pairs)
+                // Normalize polygon points
+                const normalized = polygonPoints.map((val, i) =>
+                    i % 2 === 0
+                        ? (val - imageOffset.x) / imageScale
+                        : (val - imageOffset.y) / imageScale
+                );
+
+                const shapeData = {
+                    type: 'polygon',
+                    label: currentLabel,
+                    points: normalized
+                };
+
+                saveState();
+                shapesData.push(shapeData);
+                markAsModified();
+                updateShapeList();
+                renderShapes();
+            }
+
+            polygonPoints = [];
+        }
+
+        function deleteShape(e) {
+            const shape = e.target;
+            if (shape.id && shape.id.startsWith('shape_')) {
+                const index = parseInt(shape.id.split('_')[1]);
+                shapesData.splice(index, 1);
+                markAsModified();
+                updateShapeList();
+                renderShapes();
+            }
+        }
+
+        function selectShape(index) {
+            selectedShapeIndex = index;
+            // Update shape list selection
+            document.querySelectorAll('.shape-item').forEach((item, i) => {
+                item.classList.toggle('selected', i === index);
+            });
+
+            renderShapes();
+
+            const item = document.querySelector('.shape-item')[index];
+            if (item){
+                item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        function deselectAllShapes() {
+            selectedShapeIndex = null;
+            document.querySelectorAll('.shape-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            renderShapes()
+        }
+
+        function updateShapeList() {
+            const shapeList = document.getElementById('shape-list');
+            shapeList.innerHTML = '';
+            
+            shapesData.forEach((shape, index) => {
+                const shapeItem = document.createElement('div');
+                shapeItem.className = 'shape-item';
+                const labelPart = shape.label === 'bubble' ? `
+                    <select class="form-control form-control-sm bubble-class-select" data-index="${index}" style="max-width: 120px;">
+                        ${Object.entries(bubbleClassNames).map(([clsId, clsName]) => `
+                            <option value="${clsId}" ${shape.className === clsName ? 'selected' : ''}>
+                                ${clsName}
+                            </option>`).join('')}
+                    </select>
+                ` : '';
+                shapeItem.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="label-color" style="background-color: ${labelColors[shape.label]};"></span>
+                            <strong>${shape.label + " " + (shape.label === 'bubble' && shape.className? `(${shape.className})`: '')}</strong>
+                            <div class="text-muted small">${shape.type}</div>
+                            ${labelPart}
+                        </div>
+                        <button class="btn btn-outline-danger btn-sm" onclick="removeShape(${index})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+                
+                shapeItem.addEventListener('click', () => selectShape(index));
+                shapeList.appendChild(shapeItem);
+            });
+            // Add event listeners to dropdowns after rendering
+            document.querySelectorAll('.bubble-class-select').forEach(select => {
+                select.addEventListener('change', function () {
+                    const index = parseInt(this.dataset.index);
+                    const clsId = parseInt(this.value);
+                    shapesData[index].className = bubbleClassNames[clsId];
+                    shapesData[index].cls = clsId;
+                    saveState();
+                    markAsModified();
+                });
+            });
+        }
+
+        function removeShape(index) {
+            saveState();
+            shapesData.splice(index, 1);
+            markAsModified();
+            updateShapeList();
+            renderShapes();
+        }
+
+        function markAsModified() {
+            hasUnsavedChanges = true;
+            const status = document.getElementById('save-status');
+            status.className = 'status-indicator status-modified';
+            status.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Modified';
+        }
+
+        function markAsSaved() {
+            hasUnsavedChanges = false;
+            const status = document.getElementById('save-status');
+            status.className = 'status-indicator status-saved';
+            status.innerHTML = '<i class="fas fa-check mr-1"></i>Saved';
+        }
+
+        function updateImageNavigation() {
+            document.getElementById('prev-image').disabled = currentImageIndex === 0;
+            document.getElementById('next-image').disabled = currentImageIndex === images.length - 1;
+            document.getElementById('image-counter').textContent = `Image ${currentImageIndex + 1} of ${images.length}`;
+        }
+
+        function updateZoomControls() {
+            const scale = stage.scaleX();
+            document.getElementById('zoom-slider').value = scale.toFixed(2);
+            document.getElementById('zoom-value').textContent = Math.round(scale * 100) + '%';
+        }
+
+
+        function setupEventListeners() {
+            // Tool selection
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentTool = this.dataset.tool;
+
+                    if (currentTool === 'select') {
+                        stage.draggable(true);
+                    } else {
+                        stage.draggable(false);
+                    }
+
+                    
+                    if (currentTool === 'polygon' && polygonPoints.length > 0) {
+                        finishPolygon();
+                    }
+
+                    if (currentTool === 'polygon' && currentLabel === 'bubble') {
+                        alert('Polygon tool is not allowed for speech bubbles. Use rectangle instead.');
+                        currentTool = 'select';
+                        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                        document.getElementById('select-tool').classList.add('active');
+                        return;
+                    }
+                });
+
+                document.getElementById('toggle-all-visibility').addEventListener('change', function () {
+                    showAllShapes = this.checked;
+                    renderShapes();
+                });
+
+                document.querySelectorAll('.toggle-label-visibility').forEach(input => {
+                    input.addEventListener('change', function () {
+                        const label = this.dataset.label;
+                        labelVisibility[label] = this.checked;
+                        renderShapes();
+                    });
+                });
+            });
+
+            // Label selection
+            document.querySelectorAll('.label-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    document.querySelectorAll('.label-item').forEach(i => i.classList.remove('selected'));
+                    this.classList.add('selected');
+                    currentLabel = this.dataset.label;
+                    document.getElementById('current-label').textContent = this.querySelector('strong').textContent;
+                });
+            });
+
+            // Navigation
+            document.getElementById('prev-image').addEventListener('click', () => {
+                if (currentImageIndex > 0) {
+                    if (hasUnsavedChanges) {
+                        if (confirm('You have unsaved changes. Do you want to save before switching images?')) {
+                            saveCurrentImage();
+                        }
+                    }
+                    currentImageIndex--;
+                    loadCurrentImage();
+                    updateImageNavigation();
+                }
+            });
+
+            document.getElementById('next-image').addEventListener('click', () => {
+                if (currentImageIndex < images.length - 1) {
+                    if (hasUnsavedChanges) {
+                        if (confirm('You have unsaved changes. Do you want to save before switching images?')) {
+                            saveCurrentImage();
+                        }
+                    }
+                    currentImageIndex++;
+                    loadCurrentImage();
+                    updateImageNavigation();
+                }
+            });
+
+            // Save and process
+            document.getElementById('save-current').addEventListener('click', saveCurrentImage);
+            document.getElementById('process-all').addEventListener('click', processAllImages);
+
+            // Zoom controls
+            document.getElementById('zoom-slider').addEventListener('input', function() {
+                const scale = parseFloat(this.value);
+                stage.scale({ x: scale, y: scale });
+                stage.draw();
+                updateZoomControls();
+            });
+
+            // document.getElementById('fit-to-screen').addEventListener('click', function() {
+            //     const backgroundImage = backgroundLayer.children[0];
+            //     if (backgroundImage) {
+            //         const scale = Math.min(
+            //             stage.width() / backgroundImage.width(),
+            //             stage.height() / backgroundImage.height()
+            //         ) * 0.9;
+                    
+            //         stage.scale({ x: scale, y: scale });
+            //         stage.position({ x: 0, y: 0 });
+            //         stage.draw();
+            //         updateZoomControls();
+            //     }
+            // });
+
+            // document.getElementById('actual-size').addEventListener('click', function() {
+            //     stage.scale({ x: 1, y: 1 });
+            //     stage.position({ x: 0, y: 0 });
+            //     stage.draw();
+            //     updateZoomControls();
+            // });
+
+            document.getElementById('fit-to-screen').addEventListener('click', function () {
+                const bgImage = backgroundLayer.children[0];
+                if (!bgImage) return;
+
+                const scale = Math.min(
+                    stage.width() / bgImage.width(),
+                    stage.height() / bgImage.height()
+                );
+
+                stage.scale({ x: scale, y: scale });
+                stage.position({
+                    x: (stage.width() - bgImage.width() * scale) / 2,
+                    y: (stage.height() - bgImage.height() * scale) / 2
+                });
+                stage.batchDraw();
+                updateZoomControls();
+            });
+
+            document.getElementById('actual-size').addEventListener('click', function () {
+                stage.scale({ x: 1, y: 1 });
+                stage.position({ x: 0, y: 0 });
+                stage.batchDraw();
+                updateZoomControls();
+            });
+
+
+            // Actions
+            document.getElementById('clear-all').addEventListener('click', function() {
+                if (confirm('Are you sure you want to clear all shapes?')) {
+                    saveState();
+                    shapesData = [];
+                    markAsModified();
+                    updateShapeList();
+                    renderShapes();
+                }
+            });
+
+            document.getElementById('reset-image').addEventListener('click', function() {
+            if (!confirm('Are you sure you want to reset to the original annotations? Any changes made will be lost.')) {
+                    return;
+                }
+
+                fetch(`/reset_annotations/${folder}/${images[currentImageIndex]}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        shapesData = data.annotations || [];
+                        renderShapes();
+                        updateShapeList();
+
+                        markAsModified();
+
+                        // Also reset per-image undo history
+                        const imageName = images[currentImageIndex];
+                        undoHistoryPerImage[imageName] = [];
+                        redoHistoryPerImage[imageName] = [];
+                        
+                        saveState();
+                    })
+                    .catch(err => {
+                        console.error('Failed to reset annotations:', err);
+                        alert('Error loading original annotations.');
+                    });
+            });
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    if (currentTool === 'polygon' && polygonPoints.length > 0) {
+                        finishPolygon();
+                    } else if (isDrawing) {
+                        isDrawing = false;
+                        if (currentShape) {
+                            currentShape.destroy();
+                            layer.draw();
+                        }
+                    }
+                }
+                
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    // Delete selected shapes
+                    const selectedIndex = [...document.querySelectorAll('.shape-item')].findIndex(item => 
+                        item.classList.contains('selected')
+                    );
+                    if (selectedIndex !== -1) {
+                        removeShape(selectedIndex);
+                    }
+                }
+
+                if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+                    e.preventDefault();
+                    undo();
+                    return;
+                }
+                if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'Z')) {
+                    e.preventDefault();
+                    redo();
+                    return;
+                }
+            });
+        }
+
+        function saveCurrentImage() {
+            const imageName = images[currentImageIndex];
+            const data = {
+                image: imageName,
+                annotations: shapesData
+            };
+
+            fetch(`/save_annotations/{{ folder }}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    markAsSaved();
+                    console.log('Annotations saved successfully');
+                } else {
+                    alert('Failed to save annotations: ' + result.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error saving annotations:', error);
+                alert('Failed to save annotations');
+            });
+        }
+
+
+        function processAllImages() {
+            if (hasUnsavedChanges) {
+                if (!confirm('You have unsaved changes. Save them before processing?')) {
+                    return;
+                }
+            }
+
+            const processBtn = document.getElementById('process-all');
+            const originalText = processBtn.innerHTML;
+            processBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Processing...';
+            processBtn.disabled = true;
+
+            // Save all JSONs (even unmodified)
+            const savePromises = images.map(imageName => {
+                return fetch(`/get_annotations/${folder}/${imageName}`)
+                    .then(response => response.json())
+                    .then(result => {
+                        return fetch(`/save_annotations/${folder}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                image: imageName,
+                                annotations: result.annotations || []
+                            })
+                        });
+                    });
+            });
+
+            Promise.all(savePromises)
+                .then(() => {
+                    markAsSaved(); // Reset status
+
+                    // ✅ Go to translation configuration page
+                    window.location.href = `/translation_config/${folder}`;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error during processing: ' + error.message);
+                })
+                .finally(() => {
+                    processBtn.innerHTML = originalText;
+                    processBtn.disabled = false;
+                });
+        }
+
+
+
+        // function processAllImages() {
+        //     const imageName = images[currentImageIndex];
+        //     const data = {
+        //         image: imageName,
+        //         annotations: shapesData
+        //     };
+
+        //     const processBtn = document.getElementById('process-all');
+        //     const originalText = processBtn.innerHTML;
+        //     processBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Processing...';
+        //     processBtn.disabled = true;
+
+        //     // Step 1: Save current annotation (optional)
+        //     fetch(`/save_annotations/${folder}`, {
+        //         method: 'POST',
+        //         headers: {
+        //             'Content-Type': 'application/json',
+        //         },
+        //         body: JSON.stringify(data)
+        //     })
+        //     .then(response => response.json())
+        //     .then(result => {
+        //         if (!result.success) {
+        //             throw new Error(result.error || 'Failed to save annotations');
+        //         }
+
+        //         markAsSaved();
+
+        //         // ✅ Step 2: Redirect to font/translation config
+        //         window.location.href = `/translation_config/${folder}`;
+        //     })
+        //     .catch(error => {
+        //         console.error('Error:', error);
+        //         alert('Error during save: ' + error.message);
+        //         processBtn.innerHTML = originalText;
+        //         processBtn.disabled = false;
+        //     });
+        // }
+
+
+        // function processAllImages() {
+        //     if (hasUnsavedChanges) {
+        //         if (!confirm('You have unsaved changes. Save them before processing?')) {
+        //             return;
+        //         }
+        //     }
+
+        //     const imageName = images[currentImageIndex];
+        //     const data = {
+        //         image: imageName,
+        //         annotations: shapesData
+        //     };
+
+        //     const processBtn = document.getElementById('process-all');
+        //     const originalText = processBtn.innerHTML;
+        //     processBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Processing...';
+        //     processBtn.disabled = true;
+
+        //     // Step 1: Save annotations
+        //     fetch(`/save_annotations/${folder}`, {
+        //         method: 'POST',
+        //         headers: {
+        //             'Content-Type': 'application/json',
+        //         },
+        //         body: JSON.stringify(data)
+        //     })
+        //     .then(response => response.json())
+        //     .then(result => {
+        //         if (!result.success) {
+        //             throw new Error(result.error || 'Failed to save annotations');
+        //         }
+
+        //         markAsSaved(); // ✅ saved, clear "modified" flag
+
+        //         // Step 2: Trigger processing
+        //         return fetch(`/process_translation/${folder}`, {
+        //             method: 'POST',
+        //             headers: {
+        //                 'Content-Type': 'application/json',
+        //             }
+        //         });
+        //     })
+        //     .then(response => response.json())
+        //     .then(result => {
+        //         if (result.success) {
+        //             alert('Processing completed successfully!');
+        //             if (result.redirect_url) {
+        //                 window.location.href = result.redirect_url;
+        //             }
+        //         } else {
+        //             alert('Processing failed: ' + (result.error || 'Unknown error'));
+        //         }
+        //     })
+        //     .catch(error => {
+        //         console.error('Error:', error);
+        //         alert('Error during processing: ' + error.message);
+        //     })
+        //     .finally(() => {
+        //         processBtn.innerHTML = originalText;
+        //         processBtn.disabled = false;
+        //     });
+        // }
+
+
+        // function processAllImages() {
+        //     if (hasUnsavedChanges) {
+        //         if (confirm('You have unsaved changes. Save them before processing?')) {
+        //             saveCurrentImage();
+        //         }
+        //     }
+            
+        //     if (confirm('This will process all images for translation and inpainting. Continue?')) {
+        //         // Show loading state
+        //         const processBtn = document.getElementById('process-all');
+        //         const originalText = processBtn.innerHTML;
+        //         processBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Processing...';
+        //         processBtn.disabled = true;
+                
+        //         fetch(`/process_translation/{{ folder }}`, {
+        //             method: 'POST',
+        //             headers: {
+        //                 'Content-Type': 'application/json',
+        //             }
+        //         })
+        //         .then(response => response.json())
+        //         .then(result => {
+        //             if (result.success) {
+        //                 alert('Processing completed successfully!');
+        //                 // Optionally redirect to results page
+        //                 // window.location.href = result.redirect_url;
+        //             } else {
+        //                 alert('Processing failed: ' + result.error);
+        //             }
+        //         })
+        //         .catch(error => {
+        //             console.error('Error processing images:', error);
+        //             alert('Processing failed');
+        //         })
+        //         .finally(() => {
+        //             processBtn.innerHTML = originalText;
+        //             processBtn.disabled = false;
+        //         });
+        //     }
+        // }
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const container = document.getElementById('konva-container');
+            const containerWidth = container.parentElement.clientWidth - 40;
+            const containerHeight = container.parentElement.clientHeight - 40;
+            
+            stage.width(containerWidth);
+            stage.height(containerHeight);
+            stage.draw();
+        });
+
+        // Warn before leaving with unsaved changes
+        window.addEventListener('beforeunload', function(e) {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
+        });
+    </script>
+</body>
+</html>

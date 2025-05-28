@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comic Translation - Upload</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .upload-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            margin-top: 5vh;
+            padding: 3rem 2rem;
+        }
+        
+        .drop-zone {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 4rem 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            background: linear-gradient(45deg, #f8f9ff, #ffffff);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .drop-zone::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(102, 126, 234, 0.1) 0%, transparent 70%);
+            animation: pulse 3s ease-in-out infinite;
+            z-index: 1;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(0.8); opacity: 0.5; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+        
+        .drop-zone.dragover {
+            border-color: #28a745;
+            background: linear-gradient(45deg, #e8f5e8, #f0fff0);
+            transform: scale(1.02);
+            box-shadow: 0 10px 30px rgba(40, 167, 69, 0.3);
+        }
+        
+        .drop-zone-content {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .upload-icon {
+            font-size: 4rem;
+            color: #667eea;
+            margin-bottom: 1rem;
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .browse-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            padding: 0.8rem 2rem;
+            border-radius: 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .browse-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+            color: white;
+        }
+        
+        .file-info {
+            background: #e8f4fd;
+            border-left: 4px solid #007bff;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            display: none;
+        }
+        
+        .submit-btn {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            border: none;
+            color: white;
+            padding: 1rem 3rem;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+            margin-top: 2rem;
+        }
+        
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.6);
+            color: white;
+        }
+        
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .accepted-formats {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .format-badge {
+            background: #6c757d;
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            margin: 0.2rem;
+            display: inline-block;
+        }
+        
+        .loading-spinner {
+            display: none;
+            margin-left: 1rem;
+        }
+        
+        .progress-container {
+            display: none;
+            margin-top: 1rem;
+        }
+        
+        .header-title {
+            color: #2c3e50;
+            font-weight: 300;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .header-subtitle {
+            color: #6c757d;
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8 col-md-10">
+                <div class="upload-container">
+                    <h1 class="header-title display-4">
+                        <i class="fas fa-language mr-3"></i>Comic Translator
+                    </h1>
+                    <p class="header-subtitle lead">
+                        Upload your comic images or zip files to get started with automatic translation
+                    </p>
+                    
+                    <div class="accepted-formats">
+                        <h6 class="mb-2"><i class="fas fa-info-circle text-warning mr-2"></i>Accepted File Types:</h6>
+                        <span class="format-badge">.jpg</span>
+                        <span class="format-badge">.jpeg</span>
+                        <span class="format-badge">.png</span>
+                        <span class="format-badge">.zip</span>
+                    </div>
+
+                    <form id="uploadForm" method="POST" enctype="multipart/form-data">
+                        <div class="drop-zone" id="dropZone">
+                            <div class="drop-zone-content">
+                                <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                                <h4 class="mb-3">Drag & drop your file here</h4>
+                                <p class="text-muted mb-4">Upload one image or zip file</p>
+                                <button type="button" class="btn browse-btn" onclick="document.getElementById('fileInput').click()">
+                                    <i class="fas fa-folder-open mr-2"></i>Browse File
+                                </button>
+                                <input type="file" id="fileInput" name="file" class="file-input" 
+                                       accept=".jpg,.jpeg,.png,.zip">
+                            </div>
+                        </div>
+                        
+                        <div class="file-info" id="fileInfo">
+                            <h6><i class="fas fa-file text-primary mr-2"></i>Selected File:</h6>
+                            <div id="fileList"></div>
+                        </div>
+                        
+                        <div class="progress-container" id="progressContainer">
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <button type="submit" class="btn submit-btn" id="submitBtn" disabled>
+                                <i class="fas fa-magic mr-2"></i>Start Translation
+                                <div class="spinner-border spinner-border-sm loading-spinner" role="status">
+                                    <span class="sr-only">Loading...</span>
+                                </div>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileList = document.getElementById('fileList');
+        const submitBtn = document.getElementById('submitBtn');
+        const uploadForm = document.getElementById('uploadForm');
+        const loadingSpinner = document.querySelector('.loading-spinner');
+        const progressContainer = document.getElementById('progressContainer');
+        
+        // Drag and drop functionality
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefault, false);
+            document.body.addEventListener(eventName, preventDefault, false);
+        });
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+        
+        dropZone.addEventListener('drop', handleDrop, false);
+        fileInput.addEventListener('change', handleFiles, false);
+        
+        function preventDefault(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        function highlight(e) {
+            dropZone.classList.add('dragover');
+        }
+        
+        function unhighlight(e) {
+            dropZone.classList.remove('dragover');
+        }
+        
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            fileInput.files = files;
+            handleFiles();
+        }
+        
+        function handleFiles() {
+            const files = fileInput.files;
+            if (files.length > 0) {
+                displayFiles(files);
+                submitBtn.disabled = false;
+                fileInfo.style.display = 'block';
+            } else {
+                fileInfo.style.display = 'none';
+                submitBtn.disabled = true;
+            }
+        }
+        
+        function displayFiles(files) {
+            fileList.innerHTML = '';
+            const file = files[0]; // Only show the first (and only) file
+            
+            const fileDiv = document.createElement('div');
+            fileDiv.className = 'd-flex justify-content-between align-items-center py-3 px-3 bg-light rounded';
+            
+            const fileName = document.createElement('span');
+            fileName.textContent = file.name;
+            fileName.className = 'font-weight-medium';
+            
+            const fileSize = document.createElement('small');
+            fileSize.textContent = formatFileSize(file.size);
+            fileSize.className = 'text-muted';
+            
+            const fileIcon = document.createElement('i');
+            if (file.name.toLowerCase().endsWith('.zip')) {
+                fileIcon.className = 'fas fa-file-archive text-warning mr-3';
+            } else {
+                fileIcon.className = 'fas fa-file-image text-success mr-3';
+            }
+            
+            const leftDiv = document.createElement('div');
+            leftDiv.className = 'd-flex align-items-center';
+            leftDiv.appendChild(fileIcon);
+            leftDiv.appendChild(fileName);
+            
+            fileDiv.appendChild(leftDiv);
+            fileDiv.appendChild(fileSize);
+            fileList.appendChild(fileDiv);
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Form submission with loading state
+        uploadForm.addEventListener('submit', function(e) {
+            submitBtn.disabled = true;
+            loadingSpinner.style.display = 'inline-block';
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...<div class="spinner-border spinner-border-sm loading-spinner" role="status" style="display: inline-block; margin-left: 1rem;"><span class="sr-only">Loading...</span></div>';
+            
+            // Show progress bar
+            progressContainer.style.display = 'block';
+            simulateProgress();
+        });
+        
+        function simulateProgress() {
+            let progress = 0;
+            const progressBar = document.querySelector('.progress-bar');
+            const interval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 90) progress = 90;
+                progressBar.style.width = progress + '%';
+                
+                if (progress >= 90) {
+                    clearInterval(interval);
+                }
+            }, 200);
+        }
+        
+        // File validation
+        fileInput.addEventListener('change', function() {
+            const files = this.files;
+            if (files.length > 1) {
+                alert('Please select only one file at a time.');
+                this.value = '';
+                fileInfo.style.display = 'none';
+                submitBtn.disabled = true;
+                return;
+            }
+            
+            if (files.length === 1) {
+                const file = files[0];
+                const validExtensions = ['.jpg', '.jpeg', '.png', '.zip'];
+                const extension = '.' + file.name.split('.').pop().toLowerCase();
+                
+                if (!validExtensions.includes(extension)) {
+                    alert('Please select only JPG, JPEG, PNG, or ZIP files.');
+                    this.value = '';
+                    fileInfo.style.display = 'none';
+                    submitBtn.disabled = true;
+                    return;
+                }
+            }
+            
+            handleFiles();
+        });
+    </script>
+</body>
+</html>
