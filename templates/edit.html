@@ -724,7 +724,7 @@
                                 width: shapeData.width * imageScale,
                                 height: shapeData.height * imageScale,
                                 stroke: labelColors[shapeData.label],
-                                strokeWidth: 2,
+                                strokeWidth: 1,
                                 fill: labelColors[shapeData.label] + '20',
                                 draggable: true,
                                 id: `shape_${index}`
@@ -738,7 +738,7 @@
                             shape = new Konva.Line({
                                 points: transformedPoints,
                                 stroke: labelColors[shapeData.label],
-                                strokeWidth: 2,
+                                strokeWidth: 1,
                                 fill: labelColors[shapeData.label] + '20',
                                 closed: true,
                                 draggable: true,
@@ -773,7 +773,7 @@
                             });
 
                             if (selectedShapeIndex !== null && index === selectedShapeIndex) {
-                                shape.strokeWidth(4);
+                                shape.strokeWidth(2);
                                 shape.shadowColor('black');
                                 shape.shadowBlur(10);
                                 shape.shadowOffset({ x: 0, y: 0 });
@@ -837,7 +837,7 @@
                     width: 0,
                     height: 0,
                     stroke: labelColors[currentLabel],
-                    strokeWidth: 2,
+                    strokeWidth: 1,
                     fill: labelColors[currentLabel] + '20',
                 });
                 
@@ -887,7 +887,7 @@
             const circle = new Konva.Circle({
                 x: pos.x,
                 y: pos.y,
-                radius: 5,
+                radius: 2,
                 fill: labelColors[currentLabel],
                 stroke: '#000',
                 strokeWidth: 1
@@ -953,7 +953,7 @@
             document.querySelectorAll('.shape-item').forEach(item => {
                 item.classList.remove('selected');
             });
-            renderShapes()
+            renderShapes();
         }
 
         function updateShapeList() {
