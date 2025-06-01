@@ -1,0 +1,196 @@
+<script>
+    function renderShapes() {
+            layer.destroyChildren();
+
+            shapesData.forEach((shapeData, index) => {
+                let shape, transformer;
+
+                if (shapeData.type === 'rectangle') {
+                    shape = new Konva.Rect({
+                        x: shapeData.x * imageScale + imageOffset.x,
+                        y: shapeData.y * imageScale + imageOffset.y,
+                        width: shapeData.width * imageScale,
+                        height: shapeData.height * imageScale,
+                        stroke: labelColors[shapeData.label],
+                        strokeWidth: 1,
+                        fill: labelColors[shapeData.label] + '20',
+                        draggable: true,
+                        id: `shape_${index}`
+                    });
+
+                    shape.shapeDataIndex = index;
+
+                    shape.on('click', () => selectShape(index));
+
+                    shape.on('dragend', function () {
+                        const i = this.shapeDataIndex;
+                        const attrs = this.getAttrs();
+
+                        shapesData[i].x = (attrs.x - imageOffset.x) / imageScale;
+                        shapesData[i].y = (attrs.y - imageOffset.y) / imageScale;
+                        shapesData[i].width = attrs.width / imageScale;
+                        shapesData[i].height = attrs.height / imageScale;
+
+                        // Reset to avoid transform stacking
+                        this.setAttrs({
+                            x: shapeData.x * imageScale + imageOffset.x,
+                            y: shapeData.y * imageScale + imageOffset.y,
+                            width: shapeData.width * imageScale,
+                            height: shapeData.height * imageScale
+                        });
+
+                        saveState();
+                        markAsModified();
+                    });
+
+                    shape.on('transformend', function () {
+                        const i = this.shapeDataIndex;
+                        const scaleX = this.scaleX();
+                        const scaleY = this.scaleY();
+
+                        // Apply scale to current width/height
+                        const newWidth = this.width() * scaleX;
+                        const newHeight = this.height() * scaleY;
+
+                        // Update shapeData
+                        shapesData[i].x = (this.x() - imageOffset.x) / imageScale;
+                        shapesData[i].y = (this.y() - imageOffset.y) / imageScale;
+                        shapesData[i].width = newWidth / imageScale;
+                        shapesData[i].height = newHeight / imageScale;
+
+                        // Reset scale and apply final values
+                        this.scale({ x: 1, y: 1 });
+                        this.width(newWidth);
+                        this.height(newHeight);
+
+                        saveState();
+                        markAsModified();
+                    });
+
+
+                    transformer = new Konva.Transformer({
+                        node: shape,
+                        enabledAnchors: [
+                            'top-left', 'top-center', 'top-right',
+                            'middle-left', 'middle-right',
+                            'bottom-left', 'bottom-center', 'bottom-right'
+                        ],
+                        boundBoxFunc: (oldBox, newBox) => {
+                            newBox.width = Math.max(30, newBox.width);
+                            newBox.height = Math.max(30, newBox.height);
+                            return newBox;
+                        }
+                    });
+
+                    layer.add(shape);
+                    layer.add(transformer);
+                }
+
+                else if (shapeData.type === 'polygon') {
+                    const group = new Konva.Group({ draggable: true });
+                    const transformedPoints = shapeData.points.map((val, i) =>
+                        i % 2 === 0
+                            ? val * imageScale + imageOffset.x
+                            : val * imageScale + imageOffset.y
+                    );
+
+                    shape = new Konva.Line({
+                        points: transformedPoints,
+                        stroke: labelColors[shapeData.label],
+                        strokeWidth: 1,
+                        fill: labelColors[shapeData.label] + '20',
+                        closed: true,
+                        id: `shape_${index}`
+                    });
+
+                    group.shapeDataIndex = index;
+                    group.add(shape);
+
+                    group.on('click', () => selectShape(index));
+
+                    group.on('dragend', function () {
+                        const i = this.shapeDataIndex;
+                        const line = this.findOne('Line');
+                        const dx = this.x();
+                        const dy = this.y();
+
+                        const newPoints = line.points().map((val, j) => {
+                            return (j % 2 === 0)
+                                ? (val + dx - imageOffset.x) / imageScale
+                                : (val + dy - imageOffset.y) / imageScale;
+                        });
+
+                        shapesData[i].points = newPoints;
+
+                        // Reset visual offset
+                        const newScreenPoints = newPoints.map((val, j) =>
+                            j % 2 === 0
+                                ? val * imageScale + imageOffset.x
+                                : val * imageScale + imageOffset.y
+                        );
+                        line.points(newScreenPoints);
+                        this.position({ x: 0, y: 0 });
+
+                        saveState();
+                        markAsModified();
+                    });
+
+                    
+                    group.on('transformend', function () {
+                        const i = this.shapeDataIndex;
+                        const line = this.findOne('Line');
+
+                        const scale = this.scale();
+                        const dx = this.x();
+                        const dy = this.y();
+
+                        const originalPoints = line.points();
+
+                        const newPoints = originalPoints.map((val, j) => {
+                            if (j % 2 === 0) {
+                                return ((val * scale.x + dx - imageOffset.x) / imageScale);
+                            } else {
+                                return ((val * scale.y + dy - imageOffset.y) / imageScale);
+                            }
+                        });
+
+                        shapesData[i].points = newPoints;
+
+                        // Reset transform
+                        this.scale({ x: 1, y: 1 });
+                        this.position({ x: 0, y: 0 });
+
+                        const screenPoints = newPoints.map((val, j) =>
+                            j % 2 === 0
+                                ? val * imageScale + imageOffset.x
+                                : val * imageScale + imageOffset.y
+                        );
+                        line.points(screenPoints);
+
+                        saveState();
+                        markAsModified();
+                    });
+
+
+                    transformer = new Konva.Transformer({
+                        node: group,
+                        enabledAnchors: [
+                            'top-left', 'top-center', 'top-right',
+                            'middle-left', 'middle-right',
+                            'bottom-left', 'bottom-center', 'bottom-right'
+                        ],
+                        boundBoxFunc: (oldBox, newBox) => {
+                            newBox.width = Math.max(30, newBox.width);
+                            newBox.height = Math.max(30, newBox.height);
+                            return newBox;
+                        }
+                    });
+
+                    layer.add(group);
+                    layer.add(transformer);
+                }
+            });
+
+            layer.draw();
+        }
+</script>

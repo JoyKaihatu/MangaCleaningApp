@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comic Translation - Edit</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4Q6Gf2aSP4eDXB8Miphtr37CMZZQ5oXLH2yaXMJ2w8e2ZtHTl7GptT4jmndRuHDT" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/konva/8.4.3/konva.min.js"></script>
     <style>
@@ -12,6 +12,9 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
             min-height: 100vh; 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            height: 100%;
+            overflow: hidden;
         }
         
         .edit-container { 
@@ -136,7 +139,7 @@
         }
         
         .shape-list {
-            max-height: 300px;
+            /* max-height: 300px; */
             overflow-y: auto;
         }
         
@@ -241,7 +244,7 @@
                             <button class="tool-btn" data-tool="polygon" id="polygon-tool">
                                 <i class="fas fa-draw-polygon"></i>Polygon
                             </button>
-                            <button class="tool-btn" data-tool="delete" id="delete-tool">
+                            <button class="tool-btn " data-tool="delete" id="delete-tool" disabled>
                                 <i class="fas fa-trash"></i>Delete Mode
                             </button>
                         </div>
@@ -269,15 +272,6 @@
                         </div>
                     </div>
 
-                    <!-- Shape List -->
-                    <div class="mb-4">
-                        <h6 class="font-weight-bold mb-3">
-                            <i class="fas fa-list mr-2"></i>Detected Shapes
-                        </h6>
-                        <div class="shape-list" id="shape-list">
-                            <!-- Shapes will be populated here -->
-                        </div>
-                    </div>
 
                     <!-- Actions -->
                     <div>
@@ -314,6 +308,19 @@
                             <label class="form-check-label">Text</label>
                         </div>
                     </div>
+                </div>
+                <div class="sidebar">
+
+                    <!-- Shape List -->
+                    <div class="mb-12">
+                        <h6 class="font-weight-bold mb-3">
+                            <i class="fas fa-list mr-2"></i>Detected Shapes
+                        </h6>
+                        <div class="shape-list" id="shape-list">
+                            <!-- Shapes will be populated here -->
+                        </div>
+                    </div>
+                    
                 </div>
 
                     
@@ -711,82 +718,847 @@
             markAsSaved();
         }
 
-                function renderShapes() {
-                    layer.destroyChildren();
+        function updateShapeDataFromKonva(shape, index) {
+            const newAttrs = shape.getAttrs();
+            const data = shapesData[index];
 
-                    shapesData.forEach((shapeData, index) => {
-                        let shape;
+            if (data.type === 'rectangle') {
+                data.x = (newAttrs.x - imageOffset.x) / imageScale;
+                data.y = (newAttrs.y - imageOffset.y) / imageScale;
+                data.width = newAttrs.width / imageScale;
+                data.height = newAttrs.height / imageScale;
+            } else if (data.type === 'polygon') {
+                data.points = shape.points().map((val, i) =>
+                    i % 2 === 0
+                        ? (val - imageOffset.x) / imageScale
+                        : (val - imageOffset.y) / imageScale
+                );
+            }
+        }
+        function renderShapes() {
+            layer.destroyChildren();
 
-                        if (shapeData.type === 'rectangle') {
-                            shape = new Konva.Rect({
-                                x: shapeData.x * imageScale + imageOffset.x,
-                                y: shapeData.y * imageScale + imageOffset.y,
-                                width: shapeData.width * imageScale,
-                                height: shapeData.height * imageScale,
-                                stroke: labelColors[shapeData.label],
-                                strokeWidth: 1,
-                                fill: labelColors[shapeData.label] + '20',
-                                draggable: true,
-                                id: `shape_${index}`
-                            });
-                        } else if (shapeData.type === 'polygon') {
-                            const transformedPoints = shapeData.points.map((val, i) =>
-                                i % 2 === 0
-                                    ? val * imageScale + imageOffset.x  // x
-                                    : val * imageScale + imageOffset.y  // y
-                            );
-                            shape = new Konva.Line({
-                                points: transformedPoints,
-                                stroke: labelColors[shapeData.label],
-                                strokeWidth: 1,
-                                fill: labelColors[shapeData.label] + '20',
-                                closed: true,
-                                draggable: true,
-                                id: `shape_${index}`
-                            });
-                        }
+            shapesData.forEach((shapeData, index) => {
+                let shape, transformer;
 
-                        if (shape && labelVisibility[shapeData.label] && showAllShapes) {
-                            const transformer = new Konva.Transformer({
-                                node: shape,
-                                    enabledAnchors: [
-                                        'top-left', 'top-center', 'top-right',
-                                        'middle-left', 'middle-right',
-                                        'bottom-left', 'bottom-center', 'bottom-right'
-                                    ],
-                                boundBoxFunc: (oldBox, newBox) => {
-                                    newBox.width = Math.max(30, newBox.width);
-                                    newBox.height = Math.max(30, newBox.height);
-                                    return newBox;
-                                }
-                            });
+                if (!showAllShapes || !labelVisibility[shapeData.label]) {
+                    return; // ⛔ skip hidden labels
+                }
 
-                            shape.on('click', () => selectShape(index));
-                            shape.on('transformend', function () {
-                                saveState();
-                                markAsModified();
-                            });
+                if (shapeData.type === 'rectangle') {
+                    shape = new Konva.Rect({
+                        x: shapeData.x * imageScale + imageOffset.x,
+                        y: shapeData.y * imageScale + imageOffset.y,
+                        width: shapeData.width * imageScale,
+                        height: shapeData.height * imageScale,
+                        stroke: labelColors[shapeData.label],
+                        strokeWidth: 1,
+                        fill: labelColors[shapeData.label] + '20',
+                        draggable: true,
+                        id: `shape_${index}`
+                    });
 
-                            shape.on('dragend', function () {
-                                saveState();
-                                markAsModified();
-                            });
+                    shape.shapeDataIndex = index;
 
-                            if (selectedShapeIndex !== null && index === selectedShapeIndex) {
-                                shape.strokeWidth(2);
-                                shape.shadowColor('black');
-                                shape.shadowBlur(10);
-                                shape.shadowOffset({ x: 0, y: 0 });
-                                shape.shadowOpacity(0.6);
-                            }
+                    shape.on('click', () => selectShape(index));
 
-                            layer.add(shape);
-                            layer.add(transformer);
+                    shape.on('dragend', function () {
+                        const i = this.shapeDataIndex;
+                        const attrs = this.getAttrs();
+
+                        shapesData[i].x = (attrs.x - imageOffset.x) / imageScale;
+                        shapesData[i].y = (attrs.y - imageOffset.y) / imageScale;
+                        shapesData[i].width = attrs.width / imageScale;
+                        shapesData[i].height = attrs.height / imageScale;
+
+                        // Reset to avoid transform stacking
+                        this.setAttrs({
+                            x: shapeData.x * imageScale + imageOffset.x,
+                            y: shapeData.y * imageScale + imageOffset.y,
+                            width: shapeData.width * imageScale,
+                            height: shapeData.height * imageScale
+                        });
+
+                        saveState();
+                        markAsModified();
+                    });
+
+                    shape.on('transformend', function () {
+                        const i = this.shapeDataIndex;
+                        const scaleX = this.scaleX();
+                        const scaleY = this.scaleY();
+
+                        // Apply scale to current width/height
+                        const newWidth = this.width() * scaleX;
+                        const newHeight = this.height() * scaleY;
+
+                        // Update shapeData
+                        shapesData[i].x = (this.x() - imageOffset.x) / imageScale;
+                        shapesData[i].y = (this.y() - imageOffset.y) / imageScale;
+                        shapesData[i].width = newWidth / imageScale;
+                        shapesData[i].height = newHeight / imageScale;
+
+                        // Reset scale and apply final values
+                        this.scale({ x: 1, y: 1 });
+                        this.width(newWidth);
+                        this.height(newHeight);
+
+                        saveState();
+                        markAsModified();
+                    });
+
+
+                    transformer = new Konva.Transformer({
+                        node: shape,
+                        enabledAnchors: [
+                            'top-left', 'top-center', 'top-right',
+                            'middle-left', 'middle-right',
+                            'bottom-left', 'bottom-center', 'bottom-right'
+                        ],
+                        boundBoxFunc: (oldBox, newBox) => {
+                            newBox.width = Math.max(30, newBox.width);
+                            newBox.height = Math.max(30, newBox.height);
+                            return newBox;
                         }
                     });
 
-                    layer.draw();
+                    layer.add(shape);
+                    layer.add(transformer);
                 }
+
+                else if (shapeData.type === 'polygon') {
+                    const group = new Konva.Group({ draggable: true });
+                    const transformedPoints = shapeData.points.map((val, i) =>
+                        i % 2 === 0
+                            ? val * imageScale + imageOffset.x
+                            : val * imageScale + imageOffset.y
+                    );
+
+                    shape = new Konva.Line({
+                        points: transformedPoints,
+                        stroke: labelColors[shapeData.label],
+                        strokeWidth: 1,
+                        fill: labelColors[shapeData.label] + '20',
+                        closed: true,
+                        id: `shape_${index}`
+                    });
+
+                    group.shapeDataIndex = index;
+                    group.add(shape);
+
+                    group.on('click', () => selectShape(index));
+
+                    group.on('dragend', function () {
+                        const i = this.shapeDataIndex;
+                        const line = this.findOne('Line');
+                        const dx = this.x();
+                        const dy = this.y();
+
+                        const newPoints = line.points().map((val, j) => {
+                            return (j % 2 === 0)
+                                ? (val + dx - imageOffset.x) / imageScale
+                                : (val + dy - imageOffset.y) / imageScale;
+                        });
+
+                        shapesData[i].points = newPoints;
+
+                        // Reset visual offset
+                        const newScreenPoints = newPoints.map((val, j) =>
+                            j % 2 === 0
+                                ? val * imageScale + imageOffset.x
+                                : val * imageScale + imageOffset.y
+                        );
+                        line.points(newScreenPoints);
+                        this.position({ x: 0, y: 0 });
+
+                        saveState();
+                        markAsModified();
+                    });
+
+
+                    group.on('transformend', function () {
+                        const i = this.shapeDataIndex;
+                        const line = this.findOne('Line');
+
+                        const scale = this.scale();
+                        const dx = this.x();
+                        const dy = this.y();
+
+                        const originalPoints = line.points();
+
+                        const newPoints = originalPoints.map((val, j) => {
+                            return (j % 2 === 0)
+                                ? (val * scale.x + dx - imageOffset.x) / imageScale
+                                : (val * scale.y + dy - imageOffset.y) / imageScale;
+                        });
+
+                        shapesData[i].points = newPoints;
+
+                        this.scale({ x: 1, y: 1 });
+                        this.position({ x: 0, y: 0 });
+
+                        const screenPoints = newPoints.map((val, j) =>
+                            j % 2 === 0
+                                ? val * imageScale + imageOffset.x
+                                : val * imageScale + imageOffset.y
+                        );
+                        line.points(screenPoints);
+
+                        // 🔥 Force Transformer to rebind and redraw
+                        transformer.nodes([this]);
+
+                        saveState();
+                        markAsModified();
+                    });
+
+
+
+                    transformer = new Konva.Transformer({
+                        node: group,
+                        enabledAnchors: [
+                            'top-left', 'top-center', 'top-right',
+                            'middle-left', 'middle-right',
+                            'bottom-left', 'bottom-center', 'bottom-right'
+                        ],
+                        boundBoxFunc: (oldBox, newBox) => {
+                            newBox.width = Math.max(30, newBox.width);
+                            newBox.height = Math.max(30, newBox.height);
+                            return newBox;
+                        }
+                    });
+
+                    layer.add(group);
+                    layer.add(transformer);
+                }
+            });
+
+            layer.draw();
+        }
+
+
+        // RENDER SHAPES V5
+        // function renderShapes() {
+        //     layer.destroyChildren();
+
+        //     shapesData.forEach((shapeData, index) => {
+        //         let shape;
+        //         let transformer;
+
+        //         if (shapeData.type === 'rectangle') {
+        //             shape = new Konva.Rect({
+        //                 x: shapeData.x * imageScale + imageOffset.x,
+        //                 y: shapeData.y * imageScale + imageOffset.y,
+        //                 width: shapeData.width * imageScale,
+        //                 height: shapeData.height * imageScale,
+        //                 stroke: labelColors[shapeData.label],
+        //                 strokeWidth: 1,
+        //                 fill: labelColors[shapeData.label] + '20',
+        //                 draggable: true,
+        //                 id: `shape_${index}`
+        //             });
+
+        //             shape.shapeDataIndex = index;
+
+        //             shape.on('click', () => selectShape(index));
+
+        //             shape.on('dragend transformend', function () {
+        //                 const i = this.shapeDataIndex;
+        //                 const attrs = this.getAttrs();
+        //                 shapesData[i].x = (attrs.x - imageOffset.x) / imageScale;
+        //                 shapesData[i].y = (attrs.y - imageOffset.y) / imageScale;
+        //                 shapesData[i].width = attrs.width / imageScale;
+        //                 shapesData[i].height = attrs.height / imageScale;
+        //                 saveState();
+        //                 markAsModified();
+        //             });
+
+        //             transformer = new Konva.Transformer({
+        //                 node: shape,
+        //                 enabledAnchors: [
+        //                     'top-left', 'top-center', 'top-right',
+        //                     'middle-left', 'middle-right',
+        //                     'bottom-left', 'bottom-center', 'bottom-right'
+        //                 ],
+        //                 boundBoxFunc: (oldBox, newBox) => {
+        //                     newBox.width = Math.max(30, newBox.width);
+        //                     newBox.height = Math.max(30, newBox.height);
+        //                     return newBox;
+        //                 }
+        //             });
+
+        //             layer.add(shape);
+        //             layer.add(transformer);
+        //         }
+
+        //         else if (shapeData.type === 'polygon') {
+        //             const group = new Konva.Group({ x: 0, y: 0, draggable: true });
+        //             const transformedPoints = shapeData.points.map((val, i) =>
+        //                 i % 2 === 0
+        //                     ? val * imageScale + imageOffset.x
+        //                     : val * imageScale + imageOffset.y
+        //             );
+
+        //             shape = new Konva.Line({
+        //                 points: transformedPoints,
+        //                 stroke: labelColors[shapeData.label],
+        //                 strokeWidth: 1,
+        //                 fill: labelColors[shapeData.label] + '20',
+        //                 closed: true,
+        //                 id: `shape_${index}`
+        //             });
+
+        //             group.shapeDataIndex = index;
+        //             group.add(shape);
+
+        //             group.on('click', () => selectShape(index));
+
+        //             group.on('dragend', function () {
+        //                 const idx = this.shapeDataIndex;
+        //                 const dx = this.x();
+        //                 const dy = this.y();
+        //                 const originalPoints = shape.points();
+
+        //                 const newPoints = originalPoints.map((val, i) => {
+        //                     return (i % 2 === 0)
+        //                         ? (val + dx - imageOffset.x) / imageScale
+        //                         : (val + dy - imageOffset.y) / imageScale;
+        //                 });
+
+        //                 shapesData[idx].points = newPoints;
+
+        //                 // Reset group to prevent compounded position offset
+        //                 this.position({ x: 0, y: 0 });
+
+        //                 saveState();
+        //                 markAsModified();
+        //             });
+
+        //             transformer = new Konva.Transformer({
+        //                 node: group,
+        //                 enabledAnchors: [
+        //                     'top-left', 'top-center', 'top-right',
+        //                     'middle-left', 'middle-right',
+        //                     'bottom-left', 'bottom-center', 'bottom-right'
+        //                 ],
+        //                 boundBoxFunc: (oldBox, newBox) => {
+        //                     newBox.width = Math.max(30, newBox.width);
+        //                     newBox.height = Math.max(30, newBox.height);
+        //                     return newBox;
+        //                 }
+        //             });
+
+        //             layer.add(group);
+        //             layer.add(transformer);
+        //         }
+        //     });
+
+        //     layer.draw();
+        // }
+
+
+
+        // Render Shapes V4
+        // function renderShapes() {
+        //     layer.destroyChildren();
+
+        //     shapesData.forEach((shapeData, index) => {
+        //         let group = new Konva.Group();
+        //         let shape;
+        //         let transformer;
+
+        //         if (shapeData.type === 'rectangle') {
+        //             shape = new Konva.Rect({
+        //                 x: shapeData.x * imageScale + imageOffset.x,
+        //                 y: shapeData.y * imageScale + imageOffset.y,
+        //                 width: shapeData.width * imageScale,
+        //                 height: shapeData.height * imageScale,
+        //                 stroke: labelColors[shapeData.label],
+        //                 strokeWidth: 1,
+        //                 fill: labelColors[shapeData.label] + '20',
+        //                 draggable: true,
+        //                 id: `shape_${index}`
+        //             });
+
+        //             shape.shapeDataIndex = index;
+
+        //             shape.on('dragend transformend', function () {
+        //                 const i = this.shapeDataIndex;
+        //                 const attrs = this.getAttrs();
+        //                 shapesData[i].x = (attrs.x - imageOffset.x) / imageScale;
+        //                 shapesData[i].y = (attrs.y - imageOffset.y) / imageScale;
+        //                 shapesData[i].width = attrs.width / imageScale;
+        //                 shapesData[i].height = attrs.height / imageScale;
+        //                 saveState();
+        //                 markAsModified();
+        //             });
+
+        //             shape.on('click', () => selectShape(index));
+
+        //             transformer = new Konva.Transformer({
+        //                 node: shape,
+        //                 enabledAnchors: [
+        //                     'top-left', 'top-center', 'top-right',
+        //                     'middle-left', 'middle-right',
+        //                     'bottom-left', 'bottom-center', 'bottom-right'
+        //                 ],
+        //                 boundBoxFunc: (oldBox, newBox) => {
+        //                     newBox.width = Math.max(30, newBox.width);
+        //                     newBox.height = Math.max(30, newBox.height);
+        //                     return newBox;
+        //                 }
+        //             });
+
+        //             group.add(shape);
+        //             group.add(transformer);
+        //         }
+
+        //         else if (shapeData.type === 'polygon') {
+        //             // Map and offset points
+        //             const points = shapeData.points.map((val, i) =>
+        //                 i % 2 === 0
+        //                     ? val * imageScale + imageOffset.x
+        //                     : val * imageScale + imageOffset.y
+        //             );
+
+        //             shape = new Konva.Line({
+        //                 points: points,
+        //                 stroke: labelColors[shapeData.label],
+        //                 strokeWidth: 1,
+        //                 fill: labelColors[shapeData.label] + '20',
+        //                 closed: true,
+        //                 id: `shape_${index}`
+        //             });
+
+        //             group.add(shape);
+        //             group.setAttrs({ x: 0, y: 0, draggable: true });
+        //             group.shapeDataIndex = index;
+
+        //             group.on('dragend transformend', function () {
+        //                 const i = this.shapeDataIndex;
+        //                 const line = this.findOne('Line');
+        //                 const pts = line.points();
+        //                 const dx = this.x();
+        //                 const dy = this.y();
+
+        //                 const newPoints = pts.map((val, j) =>
+        //                     j % 2 === 0
+        //                         ? (val + dx - imageOffset.x) / imageScale
+        //                         : (val + dy - imageOffset.y) / imageScale
+        //                 );
+
+        //                 shapesData[i].points = newPoints;
+
+        //                 // Reset group position
+        //                 this.position({ x: 0, y: 0 });
+
+        //                 saveState();
+        //                 markAsModified();
+        //             });
+
+        //             group.on('click', () => selectShape(index));
+
+        //             transformer = new Konva.Transformer({
+        //                 node: group,
+        //                 enabledAnchors: [
+        //                     'top-left', 'top-center', 'top-right',
+        //                     'middle-left', 'middle-right',
+        //                     'bottom-left', 'bottom-center', 'bottom-right'
+        //                 ],
+        //                 boundBoxFunc: (oldBox, newBox) => {
+        //                     newBox.width = Math.max(30, newBox.width);
+        //                     newBox.height = Math.max(30, newBox.height);
+        //                     return newBox;
+        //                 }
+        //             });
+
+        //             group.add(transformer);
+        //         }
+
+        //         if (labelVisibility[shapeData.label] && showAllShapes) {
+        //             layer.add(group);
+        //         }
+        //     });
+
+        //     layer.draw();
+        // }
+
+
+        // RENDER SHAPE V3
+        // function renderShapes() {
+        //     layer.destroyChildren();
+
+        //     shapesData.forEach((shapeData, index) => {
+        //         let shape;
+        //         let group = new Konva.Group({ draggable: true });
+        //         let isPolygon = false;
+
+        //         if (shapeData.type === 'rectangle') {
+        //             shape = new Konva.Rect({
+        //                 x: shapeData.x * imageScale + imageOffset.x,
+        //                 y: shapeData.y * imageScale + imageOffset.y,
+        //                 width: shapeData.width * imageScale,
+        //                 height: shapeData.height * imageScale,
+        //                 stroke: labelColors[shapeData.label],
+        //                 strokeWidth: 1,
+        //                 fill: labelColors[shapeData.label] + '20',
+        //                 id: `shape_${index}`
+        //             });
+        //             group.add(shape);
+        //         } else if (shapeData.type === 'polygon') {
+        //             isPolygon = true;
+        //             const transformedPoints = shapeData.points.map((val, i) =>
+        //                 i % 2 === 0
+        //                     ? val * imageScale + imageOffset.x  // x
+        //                     : val * imageScale + imageOffset.y  // y
+        //             );
+
+        //             shape = new Konva.Line({
+        //                 points: transformedPoints,
+        //                 stroke: labelColors[shapeData.label],
+        //                 strokeWidth: 1,
+        //                 fill: labelColors[shapeData.label] + '20',
+        //                 closed: true,
+        //                 id: `shape_${index}`
+        //             });
+
+        //             group.add(shape);
+        //         }
+
+        //         if (shape && labelVisibility[shapeData.label] && showAllShapes) {
+        //             group.shapeDataIndex = index;
+
+        //             const transformer = new Konva.Transformer({
+        //                 node: group,
+        //                 enabledAnchors: [
+        //                     'top-left', 'top-center', 'top-right',
+        //                     'middle-left', 'middle-right',
+        //                     'bottom-left', 'bottom-center', 'bottom-right'
+        //                 ],
+        //                 boundBoxFunc: (oldBox, newBox) => {
+        //                     newBox.width = Math.max(30, newBox.width);
+        //                     newBox.height = Math.max(30, newBox.height);
+        //                     return newBox;
+        //                 }
+        //             });
+
+        //             group.on('click', () => selectShape(index));
+
+        //             group.on('dragend transformend', function () {
+        //                 const idx = this.shapeDataIndex;
+        //                 const data = shapesData[idx];
+
+        //                 if (data.type === 'rectangle') {
+        //                     const rect = this.findOne('Rect');
+        //                     data.x = (rect.x() - imageOffset.x) / imageScale;
+        //                     data.y = (rect.y() - imageOffset.y) / imageScale;
+        //                     data.width = rect.width() / imageScale;
+        //                     data.height = rect.height() / imageScale;
+        //                 } else if (data.type === 'polygon') {
+        //                     const line = this.findOne('Line');
+        //                     const absPos = this.getAbsolutePosition();
+        //                     const pts = line.points();
+        //                     const newPoints = [];
+
+        //                     for (let i = 0; i < pts.length; i += 2) {
+        //                         const absX = pts[i] + this.x();
+        //                         const absY = pts[i + 1] + this.y();
+        //                         newPoints.push(
+        //                             (absX - imageOffset.x) / imageScale,
+        //                             (absY - imageOffset.y) / imageScale
+        //                         );
+        //                     }
+
+        //                     data.points = newPoints;
+
+        //                     // reset group to (0,0) so renderShapes() doesn't offset twice
+        //                     this.position({ x: 0, y: 0 });
+        //                 }
+
+        //                 saveState();
+        //                 markAsModified();
+        //             });
+
+        //             if (selectedShapeIndex !== null && index === selectedShapeIndex) {
+        //                 shape.strokeWidth(2);
+        //                 shape.shadowColor('black');
+        //                 shape.shadowBlur(10);
+        //                 shape.shadowOffset({ x: 0, y: 0 });
+        //                 shape.shadowOpacity(0.6);
+        //             }
+
+        //             layer.add(group);
+        //             layer.add(transformer);
+        //         }
+        //     });
+
+        //     layer.draw();
+        // }
+
+
+        // RENDER SHAPE V2
+        // function renderShapes() {
+        //     layer.destroyChildren();
+
+        //     shapesData.forEach((shapeData, index) => {
+        //         let shape;
+
+        //         if (shapeData.type === 'rectangle') {
+        //             shape = new Konva.Rect({
+        //                 x: shapeData.x * imageScale + imageOffset.x,
+        //                 y: shapeData.y * imageScale + imageOffset.y,
+        //                 width: shapeData.width * imageScale,
+        //                 height: shapeData.height * imageScale,
+        //                 stroke: labelColors[shapeData.label],
+        //                 strokeWidth: 1,
+        //                 fill: labelColors[shapeData.label] + '20',
+        //                 draggable: true,
+        //                 id: `shape_${index}`
+        //             });
+        //         } else if (shapeData.type === 'polygon') {
+        //             const transformedPoints = shapeData.points.map((val, i) =>
+        //                 i % 2 === 0
+        //                     ? val * imageScale + imageOffset.x  // x
+        //                     : val * imageScale + imageOffset.y  // y
+        //             );
+        //             shape = new Konva.Line({
+        //                 points: transformedPoints,
+        //                 stroke: labelColors[shapeData.label],
+        //                 strokeWidth: 1,
+        //                 fill: labelColors[shapeData.label] + '20',
+        //                 closed: true,
+        //                 draggable: true,
+        //                 id: `shape_${index}`
+        //             });
+        //         }
+
+        //         if (shape && labelVisibility[shapeData.label] && showAllShapes) {
+        //             shape.shapeDataIndex = index;
+
+        //             const transformer = new Konva.Transformer({
+        //                 node: shape,
+        //                 enabledAnchors: [
+        //                     'top-left', 'top-center', 'top-right',
+        //                     'middle-left', 'middle-right',
+        //                     'bottom-left', 'bottom-center', 'bottom-right'
+        //                 ],
+        //                 boundBoxFunc: (oldBox, newBox) => {
+        //                     newBox.width = Math.max(30, newBox.width);
+        //                     newBox.height = Math.max(30, newBox.height);
+        //                     return newBox;
+        //                 }
+        //             });
+
+        //             shape.on('click', () => selectShape(index));
+
+        //             shape.on('dragend', function () {
+        //                 const idx = this.shapeDataIndex;
+        //                 const data = shapesData[idx];
+
+        //                 if (data.type === 'rectangle') {
+        //                     const { x, y } = this.getAttrs();
+        //                     data.x = (x - imageOffset.x) / imageScale;
+        //                     data.y = (y - imageOffset.y) / imageScale;
+        //                 } else if (data.type === 'polygon') {
+        //                         const dx = this.x() - imageOffset.x;
+        //                         const dy = this.y() - imageOffset.y;
+
+        //                         const newPoints = this.points().map((val, i) => {
+        //                             return (i % 2 === 0)
+        //                                 ? (val - dx - imageOffset.x) / imageScale
+        //                                 : (val - dy - imageOffset.y) / imageScale;
+        //                         });
+
+        //                         data.points = newPoints;
+
+        //                         // Reset position after copying data (Konva.Line doesn't store x/y directly)
+        //                         this.x(0);
+        //                         this.y(0);
+        //                 }
+
+        //                 saveState();
+        //                 markAsModified();
+        //             });
+
+        //             shape.on('transformend', function () {
+        //                 const idx = this.shapeDataIndex;
+        //                 const data = shapesData[idx];
+        //                 const attrs = this.getAttrs();
+
+        //                 if (data.type === 'rectangle') {
+        //                     data.x = (attrs.x - imageOffset.x) / imageScale;
+        //                     data.y = (attrs.y - imageOffset.y) / imageScale;
+        //                     data.width = attrs.width / imageScale;
+        //                     data.height = attrs.height / imageScale;
+        //                 } else if (data.type === 'polygon') {
+        //                     const dx = this.x() - imageOffset.x;
+        //                     const dy = this.y() - imageOffset.y;
+
+        //                     const newPoints = this.points().map((val, i) => {
+        //                         return (i % 2 === 0)
+        //                             ? (val - dx - imageOffset.x) / imageScale
+        //                             : (val - dy - imageOffset.y) / imageScale;
+        //                     });
+
+        //                     data.points = newPoints;
+
+        //                     // Reset position after copying data (since we only transform points, not the group)
+        //                     this.x(0);
+        //                     this.y(0);
+        //                 }
+
+        //                 saveState();
+        //                 markAsModified();
+        //             });
+
+        //             if (selectedShapeIndex !== null && index === selectedShapeIndex) {
+        //                 shape.strokeWidth(2);
+        //                 shape.shadowColor('black');
+        //                 shape.shadowBlur(10);
+        //                 shape.shadowOffset({ x: 0, y: 0 });
+        //                 shape.shadowOpacity(0.6);
+        //             }
+
+        //             layer.add(shape);
+        //             layer.add(transformer);
+        //         }
+        //     });
+
+        //     layer.draw();
+        // }
+
+
+        // RENDER SHAPE V1
+        // function renderShapes() {
+        //     layer.destroyChildren();
+
+        //     shapesData.forEach((shapeData, index) => {
+        //         let shape;
+
+        //         if (shapeData.type === 'rectangle') {
+        //             shape = new Konva.Rect({
+        //                 x: shapeData.x * imageScale + imageOffset.x,
+        //                 y: shapeData.y * imageScale + imageOffset.y,
+        //                 width: shapeData.width * imageScale,
+        //                 height: shapeData.height * imageScale,
+        //                 stroke: labelColors[shapeData.label],
+        //                 strokeWidth: 1,
+        //                 fill: labelColors[shapeData.label] + '20',
+        //                 draggable: true,
+        //                 id: `shape_${index}`
+        //             });
+        //         } else if (shapeData.type === 'polygon') {
+        //             const transformedPoints = shapeData.points.map((val, i) =>
+        //                 i % 2 === 0
+        //                     ? val * imageScale + imageOffset.x  // x
+        //                     : val * imageScale + imageOffset.y  // y
+        //             );
+        //             shape = new Konva.Line({
+        //                 points: transformedPoints,
+        //                 stroke: labelColors[shapeData.label],
+        //                 strokeWidth: 1,
+        //                 fill: labelColors[shapeData.label] + '20',
+        //                 closed: true,
+        //                 draggable: true,
+        //                 id: `shape_${index}`
+        //             });
+        //         }
+
+        //         if (shape && labelVisibility[shapeData.label] && showAllShapes) {
+        //             const transformer = new Konva.Transformer({
+        //                 node: shape,
+        //                     enabledAnchors: [
+        //                         'top-left', 'top-center', 'top-right',
+        //                         'middle-left', 'middle-right',
+        //                         'bottom-left', 'bottom-center', 'bottom-right'
+        //                     ],
+        //                 boundBoxFunc: (oldBox, newBox) => {
+        //                     newBox.width = Math.max(30, newBox.width);
+        //                     newBox.height = Math.max(30, newBox.height);
+        //                     return newBox;
+        //                 }
+        //             });
+
+        //             shape.on('click', () => selectShape(index));
+        //             // shape.on('transformend', function () {
+        //             //     updateShapeDataFromKonva(shape,index);
+        //             //     saveState();
+        //             //     markAsModified();
+        //             // });
+
+        //             // shape.on('dragend', function () {
+        //             //     updateShapeDataFromKonva(shape, index);
+        //             //     saveState();
+        //             //     markAsModified();
+        //             // });
+        //             // right after you create `shape` and before you add it to the layer:
+        //             shape.shapeDataIndex = index;
+
+        //             // DRAG END
+        //             shape.on('dragend', function () {
+        //             const idx = this.shapeDataIndex;
+        //             const data = shapesData[idx];
+
+        //             if (data.type === 'rectangle') {
+        //                 const { x, y } = this.getAttrs();
+        //                 data.x = (x - imageOffset.x) / imageScale;
+        //                 data.y = (y - imageOffset.y) / imageScale;
+        //             }
+        //             else if (data.type === 'polygon') {
+        //                 // Konva.Line stores its points flat: [x0, y0, x1, y1, ...]
+        //                 const pts = this.points();
+        //                 data.points = pts.map((val, i) =>
+        //                 i % 2 === 0
+        //                     ? (val - imageOffset.x) / imageScale   // x
+        //                     : (val - imageOffset.y) / imageScale   // y
+        //                 );
+        //             }
+
+        //             saveState();
+        //             markAsModified();
+        //             });
+
+        //             // TRANSFORM END
+        //             shape.on('transformend', function () {
+        //             const idx = this.shapeDataIndex;
+        //             const data = shapesData[idx];
+        //             const attrs = this.getAttrs();
+
+        //             if (data.type === 'rectangle') {
+        //                 data.x      = (attrs.x      - imageOffset.x) / imageScale;
+        //                 data.y      = (attrs.y      - imageOffset.y) / imageScale;
+        //                 data.width  =  attrs.width  / imageScale;
+        //                 data.height =  attrs.height / imageScale;
+        //             }
+        //             else if (data.type === 'polygon') {
+        //                 // After a transform, use `shape.points()` again
+        //                 const pts = this.points();
+        //                 data.points = pts.map((val, i) =>
+        //                 i % 2 === 0
+        //                     ? (val - imageOffset.x) / imageScale
+        //                     : (val - imageOffset.y) / imageScale
+        //                 );
+        //             }
+
+        //             saveState();
+        //             markAsModified();
+        //             });
+
+
+        //             if (selectedShapeIndex !== null && index === selectedShapeIndex) {
+        //                 shape.strokeWidth(2);
+        //                 shape.shadowColor('black');
+        //                 shape.shadowBlur(10);
+        //                 shape.shadowOffset({ x: 0, y: 0 });
+        //                 shape.shadowOpacity(0.6);
+        //             }
+
+        //             layer.add(shape);
+        //             layer.add(transformer);
+        //         }
+        //     });
+
+        //     layer.draw();
+        // }
 
 
         function handleStageClick(e) {
@@ -1066,7 +1838,15 @@
 
                 document.getElementById('toggle-all-visibility').addEventListener('change', function () {
                     showAllShapes = this.checked;
-                    renderShapes();
+                    document.querySelectorAll('.toggle-label-visibility').forEach(cb => {
+                        cb.disabled = !showAllShapes;
+                        if (showAllShapes) {
+                            cb.checked = true;
+                            const label = cb.dataset.label;
+                            labelVisibility[label] = true;
+                        }
+                    });
+                        renderShapes();
                 });
 
                 document.querySelectorAll('.toggle-label-visibility').forEach(input => {

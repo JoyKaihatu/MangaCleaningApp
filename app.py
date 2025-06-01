@@ -4,11 +4,15 @@ import zipfile
 import json
 from werkzeug.utils import secure_filename
 import shutil
-from backend.yolo_detection import yolo_detect as y  # Import your YOLO detection module
 from threading import Thread
 import shutil
 import zipfile
 
+from backend.mask_maker import MaskMaker as make_mask
+from backend.yolo_detection import yolo_detect as y  # Import your YOLO detection module
+from backend.inpainting_script import InpaintingScript as inpaint
+from backend.json_to_jsonTranslate import JsonToJsonTranslate as json_translate
+from backend.draw_translation import TranslationDrawer as draw_translate
 
 
 app = Flask(__name__)
@@ -408,6 +412,7 @@ def save_annotations(folder):
         data = request.get_json()
         # print("done request data")
         image_name = data.get('image')
+        print("image_name: ", image_name)
         # print("done taking image from data")
         annotations = data.get('annotations', [])
         # print("done annotation from data")
@@ -422,8 +427,11 @@ def save_annotations(folder):
         
         # Generate JSON filename
         base_name = os.path.splitext(image_name)[0]
+        print("base_name: ", base_name)
         json_filename = f"{base_name}.json"
+        print("json_filename: ", json_filename)
         json_path = os.path.join(json_folder, json_filename)
+        print("json_path: ", json_path)
         
         # Convert editor format to YOLO format if needed
         yolo_data = convert_editor_to_yolo_format(annotations, image_name)
@@ -433,6 +441,16 @@ def save_annotations(folder):
         # Save JSON file
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(yolo_data, f, indent=2, ensure_ascii=False)
+
+        # base_image_name = image_name
+        image_location = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'image', image_name)
+        print("image_location: ", image_location)
+        mask_output = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'mask', image_name)
+        os.makedirs(os.path.dirname(mask_output), exist_ok=True)
+
+        mask_maker = make_mask()
+
+        mask_maker.process_json_and_mask(image_location, json_path, mask_output)
         
         print("Write done. about to return success")
 
@@ -463,7 +481,12 @@ def process_translation(folder):
     bbox_folder = os.path.join(session_folder, 'bbox')
     config_path = os.path.join(session_folder, 'translation_config.json')
     status_path = os.path.join(session_folder, 'status.json')
-
+    image_folder = os.path.join(session_folder, 'image')
+    mask_folder = os.path.join(session_folder, 'mask')
+    output_folder = os.path.join(session_folder, 'final_output')
+    json_for_work_path = os.path.join(session_folder, 'translated_json')
+    json_for_final_path = os.path.join(output_folder, 'translated_json')
+    os.makedirs(output_folder, exist_ok=True)
     os.makedirs(edited_folder, exist_ok=True)
 
     # ✅ 1. Write status: processing
@@ -490,15 +513,57 @@ def process_translation(folder):
         font_choices = config.get('font_choices', {})
         openai_key = config.get('openai_api_key')
 
+        inpaint_output = os.path.join(output_folder, 'inpainted')
+        os.makedirs(inpaint_output, exist_ok=True)
+
+        # Run Inpainting Here
+        print("INPAINTING STARTING")
+        inpaint_model = inpaint(image_folder, mask_folder, inpaint_output)
+        print("INPAINTING MODEL CONFIG SET")
+        inpaint_model.run_inpainting()
+        print("INPAINTING DONE")
+
         # ✅ 4. Handle each method
         if method == 'json_only':
+            print("MASUK JSON ONLY")
             # generate only json (no rendering)
             # ... do your JSON generation
-            pass
+
+            print("MAKING DIR FOR JSON")
+            os.makedirs(json_for_work_path, exist_ok=True)
+            os.makedirs(json_for_final_path, exist_ok=True)
+
+            make_json_for_work = json_translate(image_folder, edited_folder, json_for_work_path)
+            # make_json_final = json_translate(image_folder, edited_folder, json_for_final_path)
+            make_json_for_work.translate_and_save_json()
+            # make_json_final.translate_and_save_json()
+
+            for filename in os.listdir(json_for_work_path):
+                if filename.endswith('.json'):
+                    src = os.path.join(json_for_work_path, filename)
+                    dst = os.path.join(json_for_final_path, filename)
+                    shutil.copy2(src, dst)
 
         elif method == 'google':
             # ... call Google Translate and render
-            pass
+            os.makedirs(json_for_work_path, exist_ok=True)
+            os.makedirs(json_for_final_path, exist_ok=True)
+
+            make_json_for_work = json_translate(image_folder, edited_folder, json_for_work_path)
+            # make_json_final = json_translate(image_folder, edited_folder, json_for_final_path)
+            make_json_for_work.translate_and_save_json()
+            # make_json_final.translate_and_save_json()
+
+            for filename in os.listdir(json_for_work_path):
+                if filename.endswith('.json'):
+                    src = os.path.join(json_for_work_path, filename)
+                    dst = os.path.join(json_for_final_path, filename)
+                    shutil.copy2(src, dst)
+            
+            translated_path = os.path.join(output_folder, 'translated_images')
+
+            g_method = draw_translate(inpaint_output, json_for_work_path, translated_path)
+            g_method.draw_translations(config_path,base_font_location="fonts/",auto_expand=True, min_text_size=22, max_text_size=28)
 
         elif method == 'chatgpt':
             if not openai_key:
@@ -813,7 +878,8 @@ def translation_config(folder):
         2: 'Other',
         3: 'Rectangle',
         4: 'Sea Urchin',
-        5: 'Thorn'
+        5: 'Thorn',
+        6: 'Outside'
     }
     return render_template('translation_options.html', folder=folder, available_fonts=fonts, bubble_classes=bubble_classes)
 
@@ -869,7 +935,8 @@ def configure_translation_2(folder):
         2: 'Other',
         3: 'Rectangle',
         4: 'Sea Urchin',
-        5: 'Thorn'
+        5: 'Thorn',
+        6: 'Outside'
     }
     for cls_id, cls_name in bubble_classes.items():
         font_choices[cls_id] = request.form.get(f'font_{cls_id}')

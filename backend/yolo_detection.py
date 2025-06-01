@@ -64,7 +64,6 @@ class yolo_detect:
                 # print(input_path)
                 # print(img_input is None)
 
-
                 if img_input is None:
                     print(f"Failed to load {filename}")
                     continue
@@ -174,4 +173,4 @@ class yolo_detect:
 
                 json_path = os.path.join(self.output_folder_json, f"{filename}.json")
                 with open(json_path, 'w') as json_file:
-                    json.dump(bbox_data, json_file)
+                    json.dump(bbox_data, json_file, indent=2, ensure_ascii=False)
