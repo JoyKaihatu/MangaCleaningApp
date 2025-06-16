@@ -904,7 +904,6 @@
                         );
                         line.points(screenPoints);
 
-                        // 🔥 Force Transformer to rebind and redraw
                         transformer.nodes([this]);
 
                         saveState();
@@ -1659,9 +1658,9 @@
             const circle = new Konva.Circle({
                 x: pos.x,
                 y: pos.y,
-                radius: 2,
+                radius: 0.5,
                 fill: labelColors[currentLabel],
-                stroke: '#000',
+                stroke: '#FF0000',
                 strokeWidth: 1
             });
             

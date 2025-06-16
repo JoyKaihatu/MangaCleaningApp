@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, send_file, current_app
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, send_file, current_app, session
 import os
 import zipfile
 import json
@@ -13,6 +13,7 @@ from backend.yolo_detection import yolo_detect as y  # Import your YOLO detectio
 from backend.inpainting_script import InpaintingScript as inpaint
 from backend.json_to_jsonTranslate import JsonToJsonTranslate as json_translate
 from backend.draw_translation import TranslationDrawer as draw_translate
+from backend.draw_translation_refined_v2 import TranslationDrawer as draw_translate_v2
 
 
 app = Flask(__name__)
@@ -27,11 +28,13 @@ FONTS_DIR = os.path.join(BASE_DIR, 'fonts')
 FINAL_OUTPUT_FOLDER = os.path.join(BASE_DIR, 'final_output')
 
 
-app.config['FINAL_OUTPUT_FOLDER'] = FINAL_OUTPUT_FOLDER
-app.config['JSON_FOLDER'] = 'json_output'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
-app.config['TRANSLATE_FONTS_FOLDER'] = FONTS_DIR
+
+
+# app.config['FINAL_OUTPUT_FOLDER'] = FINAL_OUTPUT_FOLDER
+# app.config['JSON_FOLDER'] = 'json_output'
+# app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+# app.config['TRANSLATE_FONTS_FOLDER'] = FONTS_DIR
 
 # Ensure upload directory exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -86,6 +89,56 @@ def extract_zip(zip_path, extract_to):
     except Exception as e:
         raise ValueError(f"Error extracting ZIP file: {str(e)}")
 
+@app.route('/preview_results/<folder>')
+def preview_results(folder):
+    # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+    session_folder = os.path.join(UPLOAD_FOLDER, folder)
+    method_path = os.path.join(session_folder, 'translation_config.json')
+
+    # Load translation method and check output image folder
+    try:
+        with open(method_path, 'r') as f:
+            config = json.load(f)
+            translation_method = config.get('translation_method', 'chatgpt')
+    except Exception as e:
+        flash(f'Failed to read translation config: {e}', 'error')
+        return redirect(url_for('upload_files'))
+
+    # Determine the correct image folder
+    if translation_method == 'json_only':
+        image_dir = os.path.join(session_folder, 'final_output','inpainted')
+    else:
+        image_dir = os.path.join(session_folder, 'final_output', 'translated_images')
+
+    if not os.path.exists(image_dir):
+        flash('Processed images not found.', 'error')
+        return redirect(url_for('upload_files'))
+
+    images = sorted([
+        f for f in os.listdir(image_dir)
+        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+    ])
+
+    return render_template(
+        'preview_results.html',
+        images=images,
+        translation_method=translation_method,
+        folder=folder
+    )
+
+
+@app.route('/uploads/<folder>/final_output/<subfolder>/<filename>')
+def serve_final_output(folder, subfolder, filename):
+    # subfolder = inpainted OR translated_images
+    # base = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'final_output', subfolder)
+    base = os.path.join(UPLOAD_FOLDER, folder, 'final_output', subfolder)
+    file_path = os.path.join(base, filename)
+
+    if not os.path.exists(file_path):
+        return "Image not found", 404
+
+    return send_from_directory(base, filename)
+
 @app.route('/', methods=['GET', 'POST'])
 def upload_files():
     """Handle single file upload and processing."""
@@ -111,7 +164,8 @@ def upload_files():
     # Create a unique folder for this upload session
     import uuid
     session_id = str(uuid.uuid4())[:8]
-    session_folder = os.path.join(app.config['UPLOAD_FOLDER'], session_id)
+    # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], session_id)
+    session_folder = os.path.join(UPLOAD_FOLDER, session_id)
     os.makedirs(session_folder, exist_ok=True)
     
     try:
@@ -196,7 +250,7 @@ def edit_page2(folder):
     """
     Edit page showing uploaded files after YOLO detection.
     """
-    session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'image')
+    # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'image')
     
     if not os.path.exists(session_folder):
         flash('Upload session not found', 'error')
@@ -312,8 +366,12 @@ def edit_page(folder):
     """
     Interactive edit page for comic translation with canvas editing.
     """
-    session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'image')
-    json_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'bbox')
+    # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'image')
+    # json_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'bbox')
+
+    session_folder = os.path.join(UPLOAD_FOLDER, folder, 'image')
+    json_folder = os.path.join(UPLOAD_FOLDER, folder, 'bbox')
+
     print(json_folder)
     
     if not os.path.exists(session_folder):
@@ -343,7 +401,8 @@ def edit_page(folder):
 def uploaded_file(folder, subfolder, filename):
     """Serve uploaded files (images)."""
     try:
-        directory = os.path.join(app.config['UPLOAD_FOLDER'], folder, subfolder)
+        # directory = os.path.join(app.config['UPLOAD_FOLDER'], folder, subfolder)
+        directory = os.path.join(UPLOAD_FOLDER, folder, subfolder)
         return send_from_directory(directory, filename)
     except Exception as e:
         flash(f'File not found: {str(e)}', 'error')
@@ -387,8 +446,11 @@ def get_annotations_2(folder, filename):
 @app.route('/get_annotations/<folder>/<image>')
 def get_annotations(folder, image):
     base = os.path.splitext(image)[0] + ".json"
-    edited_path = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'edited', base)
-    original_path = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'bbox', base)
+    # edited_path = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'edited', base)
+    # original_path = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'bbox', base)
+
+    edited_path = os.path.join(UPLOAD_FOLDER, folder, 'edited', base)
+    original_path = os.path.join(UPLOAD_FOLDER, folder, 'bbox', base)
 
     if os.path.exists(edited_path):
         with open(edited_path, 'r') as f:
@@ -422,7 +484,8 @@ def save_annotations(folder):
             return jsonify({'success': False, 'error': 'No image name provided'})
         
         # Create JSON folder if it doesn't exist
-        json_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'edited')
+        # json_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'edited')
+        json_folder = os.path.join(UPLOAD_FOLDER, folder, 'edited')
         os.makedirs(json_folder, exist_ok=True)
         
         # Generate JSON filename
@@ -443,9 +506,11 @@ def save_annotations(folder):
             json.dump(yolo_data, f, indent=2, ensure_ascii=False)
 
         # base_image_name = image_name
-        image_location = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'image', image_name)
+        # image_location = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'image', image_name)
+        image_location = os.path.join(UPLOAD_FOLDER, folder, 'image', image_name)
         print("image_location: ", image_location)
-        mask_output = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'mask', image_name)
+        # mask_output = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'mask', image_name)
+        mask_output = os.path.join(UPLOAD_FOLDER, folder, 'mask', image_name)
         os.makedirs(os.path.dirname(mask_output), exist_ok=True)
 
         mask_maker = make_mask()
@@ -464,7 +529,8 @@ def save_annotations(folder):
 @app.route('/reset_annotations/<folder>/<image>')
 def reset_annotations(folder, image):
     base = os.path.splitext(image)[0] + ".json"
-    original_path = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'bbox', base)
+    # original_path = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'bbox', base)
+    original_path = os.path.join(UPLOAD_FOLDER, folder, 'bbox', base)
 
     if os.path.exists(original_path):
         with open(original_path, 'r') as f:
@@ -476,7 +542,8 @@ def reset_annotations(folder, image):
 
 @app.route('/process_translation/<folder>', methods=['POST'])
 def process_translation(folder):
-    session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+    # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+    session_folder = os.path.join(UPLOAD_FOLDER, folder)
     edited_folder = os.path.join(session_folder, 'edited')
     bbox_folder = os.path.join(session_folder, 'bbox')
     config_path = os.path.join(session_folder, 'translation_config.json')
@@ -490,8 +557,8 @@ def process_translation(folder):
     os.makedirs(edited_folder, exist_ok=True)
 
     # ✅ 1. Write status: processing
-    with open(status_path, 'w') as f:
-        json.dump({'status': 'processing'}, f)
+    # with open(status_path, 'w') as f:
+    #     json.dump({'status': 'processing'}, f)
 
     try:
         # ✅ 2. Ensure all annotations copied
@@ -544,6 +611,8 @@ def process_translation(folder):
                     dst = os.path.join(json_for_final_path, filename)
                     shutil.copy2(src, dst)
 
+            shutil.copytree(mask_folder, os.path.join(output_folder, 'mask'), copy_function=shutil.copy2, dirs_exist_ok= True)
+
         elif method == 'google':
             # ... call Google Translate and render
             os.makedirs(json_for_work_path, exist_ok=True)
@@ -563,7 +632,15 @@ def process_translation(folder):
             translated_path = os.path.join(output_folder, 'translated_images')
 
             g_method = draw_translate(inpaint_output, json_for_work_path, translated_path)
-            g_method.draw_translations(config_path,base_font_location="fonts/",auto_expand=True, min_text_size=22, max_text_size=28)
+            #OLD
+            g_method.draw_translations(config_path, base_font_location="fonts/" ,auto_expand=False , min_text_size=22, max_text_size=60)
+            # NEW    
+            # g_method.draw_translations(config_path, base_font_location="fonts/", auto_expand=True, auto_font_size=True, min_text_size=22, max_text_size=28)
+
+            #NEW V2
+            # g_method = draw_translate_v2(inpaint_output, json_for_work_path, translated_path)
+            # g_method.draw_translations(config_path, base_font_location="fonts/", auto_expand=False, max_text_size=52, auto_font_size=True)
+
 
         elif method == 'chatgpt':
             if not openai_key:
@@ -575,26 +652,51 @@ def process_translation(folder):
             raise Exception("Unknown translation method")
 
 
-        final_output_folder = os.path.join(app.config['FINAL_OUTPUT_FOLDER'])
+        # final_output_folder = os.path.join(app.config['FINAL_OUTPUT_FOLDER'])
+        final_output_folder = os.path.join(FINAL_OUTPUT_FOLDER)
+            
         os.makedirs(final_output_folder, exist_ok=True)
+
+        # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+        # final_output_folder = os.path.join(app.config['FINAL_OUTPUT_FOLDER'])
+
+        session_folder = os.path.join(UPLOAD_FOLDER, folder)
+        final_output_folder = os.path.join(FINAL_OUTPUT_FOLDER)
+        
 
         zip_filename = f"{folder}_output.zip"
         zip_path = os.path.join(final_output_folder, zip_filename)
 
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk(os.path.join(app.config['UPLOAD_FOLDER'], folder, 'final_output')):
+            for root, dirs, files in os.walk(os.path.join(UPLOAD_FOLDER, folder, 'final_output')):
                 for file in files:
                     full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, os.path.join(app.config['UPLOAD_FOLDER'], folder, 'final_output'))
+                    rel_path = os.path.relpath(full_path, os.path.join(UPLOAD_FOLDER, folder, 'final_output'))
                     zipf.write(full_path, arcname=rel_path)
-        try:
-            shutil.rmtree(session_folder)
-        except Exception as e:
-            print(f"[WARN] Could not remove session folder: {e}")
+        # try:
+        #     shutil.rmtree(session_folder)
+        # except Exception as e:
+        #     print(f"[WARN] Could not remove session folder: {e}")
+
 
         # ✅ 5. Set status to done
         with open(os.path.join(final_output_folder, f"{folder}_status.json"), 'w') as f:
             json.dump({'status': 'done', 'zip': zip_filename}, f)
+
+        status_data = {}
+        if os.path.exists(status_path):
+            try:
+                with open(status_path, 'r', encoding='utf-8') as f:
+                    status_data = json.load(f)
+            except:
+                pass
+        
+        # Update status
+        status_data['status'] = 'done'
+
+        # Save back to the same file
+        with open(status_path, 'w', encoding='utf-8') as f:
+            json.dump(status_data, f, indent=2)
 
     except Exception as e:
         # ❌ 6. If error, log it and keep status as 'processing' or write 'failed'
@@ -610,7 +712,8 @@ def process_translation_2(folder):
     """Process all images for translation and inpainting."""
     try:
         # print("Masuk process translation")
-        session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+        # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+        session_folder = os.path.join(UPLOAD_FOLDER, folder)
         # print("session folder checking done")
 
         status_path = os.path.join(session_folder, 'status.json')
@@ -865,7 +968,8 @@ def convert_editor_to_yolo_format(annotations, image_name):
 
 @app.route('/translation_config/<folder>', methods=['GET'])
 def translation_config(folder):
-    fonts_path = app.config['TRANSLATE_FONTS_FOLDER']
+    # fonts_path = app.config['TRANSLATE_FONTS_FOLDER']
+    fonts_path = FONTS_DIR
     font_extensions = ('.ttf', '.otf', '.woff', '.woff2')
     print(fonts_path)
     # fonts = [f for f in os.listdir(fonts_path) if os.path.isdir(os.path.join(fonts_path, f))]
@@ -903,7 +1007,8 @@ def configure_translation(folder):
             "openai_api_key": openai_api_key
         }
 
-        session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+        # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+        session_folder = os.path.join(UPLOAD_FOLDER, folder)
         config_path = os.path.join(session_folder, 'translation_config.json')
 
         with open(config_path, 'w', encoding='utf-8') as f:
@@ -912,6 +1017,9 @@ def configure_translation(folder):
         # ✅ Run processing in background thread
         def run_translation():
             with app.app_context():
+                status_path = os.path.join(session_folder, 'status.json')
+                with open(status_path, 'w') as f:
+                    json.dump({'status': 'processing'}, f)
                 # Simulate a POST request to /process_translation/<folder>
                 client = current_app.test_client()
                 client.post(f'/process_translation/{folder}')
@@ -919,11 +1027,33 @@ def configure_translation(folder):
         Thread(target=run_translation).start()
 
         # ✅ Redirect immediately to results page (will show status/progress)
-        return redirect(url_for('results_page', folder=folder))
+        # return redirect(url_for('results_page', folder=folder))
+        return redirect(url_for('preview_status', folder=folder))
+
 
     except Exception as e:
         return f"Error saving configuration: {str(e)}", 500
 
+
+
+@app.route('/preview_status/<folder>')
+def preview_status(folder):
+    # status_path = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'status.json')
+    status_path = os.path.join(UPLOAD_FOLDER, folder, 'status.json')
+
+    if os.path.exists(status_path):
+        try:
+            with open(status_path, 'r') as f:
+                status = json.load(f).get("status", "processing")
+        except:
+            status = "processing"
+    else:
+        status = "processing"
+
+    if status == "done":
+        return redirect(url_for('preview_results', folder=folder))
+    else:
+        return render_template('preview_status.html', folder=folder)
 
 
 
@@ -950,24 +1080,33 @@ def configure_translation_2(folder):
         'openai_api_key': openai_api_key
     }
 
-    config_path = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'translation_config.json')
+    # config_path = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'translation_config.json')
+    config_path = os.path.join(UPLOAD_FOLDER, folder, 'translation_config.json')
     with open(config_path, 'w') as f:
         json.dump(config, f, indent=2)
 
     return redirect(url_for('process_translation', folder=folder))
 
 
-
-
 # Optional: Results page to show processed images
 @app.route('/results/<folder>')
 def results_page(folder):
-    status_path = os.path.join(app.config['FINAL_OUTPUT_FOLDER'], f"{folder}_status.json")
+    
+    # status_path = os.path.join(app.config['FINAL_OUTPUT_FOLDER'], f"{folder}_status.json")
+    status_path = os.path.join(FINAL_OUTPUT_FOLDER, f"{folder}_status.json")
     if not os.path.exists(status_path):
         return render_template('results.html', status='processing', folder=folder)
 
     with open(status_path, 'r') as f:
         status_data = json.load(f)
+
+    # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+    session_folder = os.path.join(UPLOAD_FOLDER, folder)
+    
+    try:
+        shutil.rmtree(session_folder)
+    except Exception as e:
+        print(f"[WARN] Could not remove session folder: {e}")
 
     return render_template('results.html', status=status_data.get('status'), zip_filename=status_data.get('zip'), folder=folder)
 
@@ -975,7 +1114,8 @@ def results_page(folder):
 
 def results_page_2(folder):
     """Show translation results."""
-    session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+    # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+    session_folder = os.path.join(UPLOAD_FOLDER, folder)
     
     if not os.path.exists(session_folder):
         flash('Session not found', 'error')
@@ -1007,8 +1147,11 @@ def results_page_2(folder):
 
 @app.route('/download/<filename>')
 def download_result_zip(filename):
-    final_output_folder = app.config['FINAL_OUTPUT_FOLDER']
+    # final_output_folder = app.config['FINAL_OUTPUT_FOLDER']
+    final_output_folder = FINAL_OUTPUT_FOLDER
     file_path = os.path.join(final_output_folder, filename)
+
+    print(file_path)
 
     if not os.path.exists(file_path):
         return "Zip file not found.", 404

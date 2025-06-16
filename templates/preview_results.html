@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preview Results - Comic Translation</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        
+        .preview-container {
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+        
+        .image-viewer {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .image-display {
+            position: relative;
+            text-align: center;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .comic-image {
+            max-width: 100%;
+            max-height: 70vh;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            transition: opacity 0.3s ease;
+        }
+        
+        .loading-spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        
+        .image-info {
+            background: #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .navigation-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .nav-button {
+            min-width: 100px;
+        }
+        
+        .page-indicator {
+            font-weight: 600;
+            color: #495057;
+            padding: 0 20px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .method-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        
+        .method-chatgpt { background-color: #d4edda; color: #155724; }
+        .method-google { background-color: #cce5ff; color: #004085; }
+        .method-json { background-color: #fff3cd; color: #856404; }
+        
+        .fade-transition {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .fade-transition.loaded {
+            opacity: 1;
+        }
+        
+        @media (max-width: 768px) {
+            .navigation-controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .page-indicator {
+                order: -1;
+                padding: 0;
+                margin-bottom: 10px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .action-buttons .btn {
+                width: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid preview-container">
+        <div class="row justify-content-center">
+            <div class="col-xl-10 col-lg-11">
+                <!-- Header -->
+                <div class="text-center mb-4">
+                    <h2 class="mb-3">
+                        <i class="fas fa-eye me-2"></i>
+                        Preview Results
+                    </h2>
+                    <div class="image-info">
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <strong>Translation Method:</strong>
+                                <span class="method-badge method-{{ translation_method }}">
+                                    {{ translation_method.replace('_', ' ').title() }}
+                                </span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Total Images:</strong> {{ images|length }}
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Folder:</strong> {{ folder }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Image Viewer -->
+                <div class="image-viewer">
+                    <div class="image-display">
+                        <div class="loading-spinner d-none">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                        
+                        <img id="currentImage" 
+                             class="comic-image fade-transition" 
+                             src="" 
+                             alt="Comic page"
+                             style="display: none;">
+                        
+                        <div id="noImageMessage" class="text-muted">
+                            <i class="fas fa-image fa-3x mb-3"></i>
+                            <p>No images to display</p>
+                        </div>
+                    </div>
+
+                    <!-- Navigation Controls -->
+                    <div class="navigation-controls">
+                        <button id="prevBtn" class="btn btn-outline-primary nav-button" disabled>
+                            <i class="fas fa-chevron-left me-1"></i>
+                            Previous
+                        </button>
+                        
+                        <div class="page-indicator">
+                            <span id="currentPage">1</span> / <span id="totalPages">{{ images|length }}</span>
+                            <br>
+                            <small class="text-muted" id="currentFilename"></small>
+                        </div>
+                        
+                        <button id="nextBtn" class="btn btn-outline-primary nav-button" disabled>
+                            Next
+                            <i class="fas fa-chevron-right ms-1"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <a href="/edit/{{ folder }}" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-edit me-2"></i>
+                        Back to Edit
+                    </a>
+                    
+                    <a href="/translation_options/{{ folder }}" class="btn btn-outline-secondary btn-lg">
+                        <i class="fas fa-cog me-2"></i>
+                        Back to Options
+                    </a>
+                    
+                    <a href="/results/{{ folder }}" class="btn btn-success btn-lg">
+                        <i class="fas fa-download me-2"></i>
+                        Finalize & Download
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Image data from Flask
+        const images = {{ images | tojson }};
+        const translationMethod = "{{ translation_method }}";
+        const folder = "{{ folder }}";
+        
+        let currentIndex = 0;
+        
+        // DOM elements
+        const currentImage = document.getElementById('currentImage');
+        const currentPageSpan = document.getElementById('currentPage');
+        const currentFilenameSpan = document.getElementById('currentFilename');
+        const totalPagesSpan = document.getElementById('totalPages');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const loadingSpinner = document.querySelector('.loading-spinner');
+        const noImageMessage = document.getElementById('noImageMessage');
+        
+        function showLoading() {
+            loadingSpinner.classList.remove('d-none');
+            currentImage.classList.remove('loaded');
+        }
+        
+        function hideLoading() {
+            loadingSpinner.classList.add('d-none');
+            currentImage.classList.add('loaded');
+        }
+        
+        function getImagePath(filename) {
+            // Determine the correct path based on translation method
+            if (translationMethod === 'json_only') {
+                return `/uploads/${folder}/final_output/inpainted/${filename}`;
+            } else {
+                return `/uploads/${folder}/final_output/translated_images/${filename}`;
+            }
+        }
+        
+        function displayImage(index) {
+            if (images.length === 0) {
+                noImageMessage.style.display = 'block';
+                currentImage.style.display = 'none';
+                return;
+            }
+            
+            noImageMessage.style.display = 'none';
+            
+            showLoading();
+            
+            const filename = images[index];
+            const imagePath = getImagePath(filename);
+            
+            // Create a new image to preload
+            const newImg = new Image();
+            newImg.onload = function() {
+                currentImage.src = imagePath;
+                currentImage.style.display = 'block';
+                hideLoading();
+            };
+            newImg.onerror = function() {
+                console.error('Failed to load image:', imagePath);
+                currentImage.src = '/static/placeholder-image.png'; // Fallback
+                currentImage.style.display = 'block';
+                hideLoading();
+            };
+            newImg.src = imagePath;
+            
+            // Update UI
+            currentPageSpan.textContent = index + 1;
+            currentFilenameSpan.textContent = filename;
+            
+            // Update navigation buttons
+            prevBtn.disabled = index === 0;
+            nextBtn.disabled = index === images.length - 1;
+        }
+        
+        function goToPrevious() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                displayImage(currentIndex);
+            }
+        }
+        
+        function goToNext() {
+            if (currentIndex < images.length - 1) {
+                currentIndex++;
+                displayImage(currentIndex);
+            }
+        }
+        
+        // Event listeners
+        prevBtn.addEventListener('click', goToPrevious);
+        nextBtn.addEventListener('click', goToNext);
+        
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                goToPrevious();
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                goToNext();
+            }
+        });
+        
+        // Touch/swipe support for mobile
+        let touchStartX = 0;
+        let touchEndX = 0;
+        
+        currentImage.addEventListener('touchstart', function(e) {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+        
+        currentImage.addEventListener('touchend', function(e) {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+        
+        function handleSwipe() {
+            const swipeThreshold = 50;
+            const swipeDistance = touchEndX - touchStartX;
+            
+            if (Math.abs(swipeDistance) > swipeThreshold) {
+                if (swipeDistance > 0) {
+                    goToPrevious(); // Swipe right = previous
+                } else {
+                    goToNext(); // Swipe left = next
+                }
+            }
+        }
+        
+        // Initialize
+        if (images.length > 0) {
+            totalPagesSpan.textContent = images.length;
+            displayImage(0);
+        } else {
+            totalPagesSpan.textContent = '0';
+            noImageMessage.style.display = 'block';
+        }
+        
+        // Add method-specific UI hints
+        if (translationMethod === 'json_only') {
+            const hint = document.createElement('div');
+            hint.className = 'alert alert-info mt-3';
+            hint.innerHTML = '<i class="fas fa-info-circle me-2"></i><strong>Note:</strong> Showing clean inpainted images (text removed) since translation method is "JSON Only".';
+            document.querySelector('.image-viewer').appendChild(hint);
+        }
+    </script>
+</body>
+</html>

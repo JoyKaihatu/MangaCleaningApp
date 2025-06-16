@@ -1,0 +1,12 @@
+{
+  "font_choices": {
+    "0": "CC Wild Words Roman.ttf",
+    "1": "CC Wild Words Roman.ttf",
+    "2": "CC Wild Words Roman.ttf",
+    "3": "CC Wild Words Roman.ttf",
+    "4": "CC Wild Words Roman.ttf",
+    "5": "CC Wild Words Roman.ttf"
+  },
+  "translation_method": "json_only",
+  "openai_api_key": ""
+}

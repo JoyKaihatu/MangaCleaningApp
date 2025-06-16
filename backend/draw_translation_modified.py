@@ -7,7 +7,6 @@ import numpy as np
 import freetype
 from tqdm import tqdm
 from collections import defaultdict
-import re
 
 # Paths
 # inpainted_folder = './output_inpaint_zeitaku_7'
@@ -24,23 +23,6 @@ class TranslationDrawer:
         self.translation_json_folder = translation_json_folder
         self.output_folder = output_folder
         os.makedirs(self.output_folder, exist_ok=True)
-
-    
-    def smart_split(self,text):
-        """
-        Smart tokenizer for translated text.
-        - Keeps contractions: "doesn't", "you're"
-        - Handles hyphen suffixes: "-san", "-kun"
-        - Normalizes ellipses: ". . ." → "..."
-        - Glues punctuation (?, !, .) to the word before it
-        """
-        # Normalize ellipses written as ". . ." or ". . . . ." → "..."
-        text = re.sub(r"(?:\s*\.\s*){3,}", "...", text)
-
-        # Regex: match word optionally with apostrophe/hyphen + glued punctuation
-        tokens = re.findall(r"[a-zA-Z0-9]+(?:['-][a-zA-Z0-9]+)*[.,!?…]*", text)
-
-        return tokens
 
     def detect_overlaps(self,translations):
         """
@@ -125,7 +107,7 @@ class TranslationDrawer:
         
         return mask
 
-    def draw_text_on_image_freetype(self, img, text, x1, y1, x2, y2, inside_bubble, bubble_mask=None, box_expansion=0, font_path="./fonts/CC Wild Words Roman.ttf", min_text_size = 12, max_text_size = 40):
+    def draw_text_on_image_freetype(self, img, text, x1, y1, x2, y2, inside_bubble, bubble_mask=None, box_expansion=0, font_path="./fonts/CC Wild Words Roman.ttf", min_text_size = 12, max_text_size = 40, auto_font_size=False):
         # Apply box expansion to the coordinates
         x1 = max(0, x1 - box_expansion)
         y1 = max(0, y1 - box_expansion)
@@ -143,8 +125,6 @@ class TranslationDrawer:
                         [(x2-i, y1+j) for i in [0, x2-x1] for j in range(0, y2-y1, 5)]
             
             outside_points = [p for p in box_points if not self.is_point_in_bubble(p, bubble_mask)]
-
-            outside_ratio = len(outside_points)/ len(box_points)
             
             if outside_points:
                 # Shrink the box to stay within the bubble
@@ -157,18 +137,6 @@ class TranslationDrawer:
                 x2 = min(img.shape[1], cx + new_width // 2)
                 y2 = min(img.shape[0], cy + new_height // 2)
         
-            # if outside_ratio > 0.2:
-            #     # Shrink the box to stay within the bubble
-            #     shrink_factor = 0.95  # Adjust as needed
-            #     cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-            #     new_width = int((x2 - x1) * shrink_factor)
-            #     new_height = int((y2 - y1) * shrink_factor)
-            #     x1 = max(0, cx - new_width // 2)
-            #     y1 = max(0, cy - new_height // 2)
-            #     x2 = min(img.shape[1], cx + new_width // 2)
-            #     y2 = min(img.shape[0], cy + new_height // 2)
-
-
         text_padding = 4
         box_padding = 6
         line_spacing = 6
@@ -203,14 +171,7 @@ class TranslationDrawer:
 
             def wrap_text_freetype(text, font_size):
                 face.set_char_size(font_size * 48)
-
-                #OLD SPLIT
-                # words = text.split()
-                
-                #NEW SPLIT
-                words = self.smart_split(text)
-
-
+                words = text.split()
                 lines = []
                 current_line = ""
                 for word in words:
@@ -226,14 +187,27 @@ class TranslationDrawer:
                     lines.append(current_line)
                 return lines
 
-            best_font_size = min_text_size
-            best_lines = wrap_text_freetype(text, best_font_size)
+            
+            if auto_font_size:
+                for size in range(min_text_size, max_text_size + 1, 1):
+                    lines = wrap_text_freetype(text, size)
+                    face.set_char_size(size * 48)
+                    line_height = face.size.height >> 6
+                    total_height = len(lines) * (line_height + line_spacing) - line_spacing
+                    max_line_width = max([get_line_width(line, size) for line in lines] + [0])
+                    if total_height <= reduced_max_height and max_line_width <= reduced_max_width:
+                        best_font_size = size
+                        best_lines = lines
+            else:
+                best_font_size = min_text_size
+                best_lines = wrap_text_freetype(text, best_font_size)
+    
 
             # Reduce max size to accommodate the stroke width
             reduced_max_width = max_width - stroke_width * 2
             reduced_max_height = max_height - stroke_width * 2
 
-            for size in range(min_text_size, max_text_size + 1, 1):
+            for size in range(min_text_size, max_text_size, 2):
                 lines = wrap_text_freetype(text, size)
                 face.set_char_size(size * 48)
                 line_height = face.size.height >> 6
@@ -305,7 +279,7 @@ class TranslationDrawer:
             if 'face' in locals():
                 del face
 
-    def draw_translations(self,font_config_path, box_expansion=0, auto_expand=False, min_text_size=16, base_font_location="fonts/", max_text_size = 40):
+    def draw_translations(self,font_config_path, box_expansion=0, auto_expand=False, auto_font_size=False, min_text_size=16, base_font_location="fonts/", max_text_size = 40):
         """
         Draw translations on images with expanded text boxes
         
@@ -400,17 +374,28 @@ class TranslationDrawer:
                                 
                                 # Estimate how much space the text would need at min_text_size
                                 text_length = len(english_text)
+                                print("text length done", text_length)
+                                print(temp_face.size.max_advance)
+                                print(temp_face.size.max_advance >> 6)
                                 chars_per_line = max(1, original_width // (temp_face.size.max_advance >> 6))
+                                print("chars per line done", chars_per_line)
+                                print(text_length)
+                                print(chars_per_line)
                                 estimated_lines = max(1, text_length // chars_per_line)
+                                print("estimated lines done", estimated_lines)
                                 line_height = temp_face.size.height >> 6
+                                print(line_height)
                                 estimated_height = estimated_lines * line_height * 1.2  # 1.2 for line spacing
+                                print("estimate space needed for text done", estimated_height)
                                 
                                 # Calculate expansion needed
                                 width_ratio = estimated_height / original_height
                                 expansion_needed = int(original_width * (width_ratio - 1) / 2)
+                                print("calculate expansion needed done", expansion_needed)
                                 
                                 # Limit expansion to reasonable values
                                 current_expansion = min(100, max(0, expansion_needed))
+                                print(f"Auto expansion for text: {english_text[:20]}... - {current_expansion}px")
                             
                             # If overlapping, reduce expansion to minimize overlap
                             if translation.get("overlaps", False):
@@ -427,7 +412,7 @@ class TranslationDrawer:
                                 font_path=font_path,
                                 min_text_size=min_text_size,
                                 max_text_size=max_text_size
-                            )
+                            , auto_font_size=auto_font_size)
                             print(f"Drew text: {english_text}")
                     except Exception as e:
                         print(f"Error drawing text: {e}")
