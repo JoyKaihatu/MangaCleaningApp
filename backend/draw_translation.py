@@ -25,8 +25,21 @@ class TranslationDrawer:
         self.output_folder = output_folder
         os.makedirs(self.output_folder, exist_ok=True)
 
+    def convert_language_for_gemini(self,language:str):
+        iso_map = {
+        "en": "english_text",
+        "id": "indonesian_text",
+        "es": "spanish_text",
+        "fr": "french_text",
+        "de": "german_text",
+        "ko": "korean_text",
+        "zh": "chinese_text",
+        "th": "thai_text",
+        }
+
+        return iso_map.get(language.lower(), language)
     
-    def smart_split(self,text):
+    def smart_split_2(self,text):
         """
         Smart tokenizer for translated text.
         - Keeps contractions: "doesn't", "you're"
@@ -41,6 +54,46 @@ class TranslationDrawer:
         tokens = re.findall(r"[a-zA-Z0-9]+(?:['-][a-zA-Z0-9]+)*[.,!?…]*", text)
 
         return tokens
+
+    def smart_split(self,text):
+        """
+        Splits translated text into tokens for better wrapping.
+        Handles:
+        - Separating suffixes like '-kun' into ['Natsume', '-kun']
+        - Preserving contractions like "don't", "you're"
+        - Treating '...' as a separate token (not glued to last word)
+        """
+        # Normalize all types of ellipses (". . ." → "...")
+        text = re.sub(r"(?:\s*\.\s*){3,}", " ... ", text)
+
+        # First split by whitespace
+        raw_tokens = text.strip().split()
+
+        final_tokens = []
+        for token in raw_tokens:
+            # If it's a contraction or normal word (with optional punctuation)
+            # Capture: word + trailing punctuation (but not ellipses here)
+            match = re.match(r"([a-zA-Z0-9]+(?:'[a-zA-Z0-9]+)?)([.,!?]*)", token)
+            if match:
+                word, punctuation = match.groups()
+
+                # Check if the word contains a hyphen with suffix form
+                if '-' in word and not word.startswith('-'):
+                    parts = word.split('-', 1)
+                    final_tokens.append(parts[0])
+                    final_tokens.append('-' + parts[1])
+                else:
+                    final_tokens.append(word)
+
+                # Add punctuation as a separate token if exists
+                if punctuation:
+                    final_tokens.append(punctuation)
+            elif token == '...':
+                final_tokens.append('...')
+            else:
+                final_tokens.append(token)
+
+        return final_tokens
 
     def detect_overlaps(self,translations):
         """
@@ -125,7 +178,7 @@ class TranslationDrawer:
         
         return mask
 
-    def draw_text_on_image_freetype(self, img, text, x1, y1, x2, y2, inside_bubble, bubble_mask=None, box_expansion=0, font_path="./fonts/CC Wild Words Roman.ttf", min_text_size = 12, max_text_size = 40):
+    def draw_text_on_image_freetype(self, img, text, x1, y1, x2, y2, inside_bubble, bubble_mask=None, box_expansion=0, font_path="./fonts/CC Wild Words Roman.ttf", min_text_size = 12, max_text_size = 40, smart_split = False):
         # Apply box expansion to the coordinates
         x1 = max(0, x1 - box_expansion)
         y1 = max(0, y1 - box_expansion)
@@ -201,14 +254,16 @@ class TranslationDrawer:
                     width += face.glyph.advance.x >> 6
                 return width
 
-            def wrap_text_freetype(text, font_size):
+            def wrap_text_freetype(text, font_size, smarts_split = False):
                 face.set_char_size(font_size * 48)
 
-                #OLD SPLIT
-                # words = text.split()
-                
-                #NEW SPLIT
-                words = self.smart_split(text)
+                if not smarts_split:
+                    #OLD SPLIT
+                    # words = text.split()
+                    words = self.smart_split_2(text)
+                else:
+                    #NEW SPLIT
+                    words = self.smart_split(text)
 
 
                 lines = []
@@ -227,7 +282,7 @@ class TranslationDrawer:
                 return lines
 
             best_font_size = min_text_size
-            best_lines = wrap_text_freetype(text, best_font_size)
+            best_lines = wrap_text_freetype(text, best_font_size, smart_split)
 
             # Reduce max size to accommodate the stroke width
             reduced_max_width = max_width - stroke_width * 2
@@ -305,7 +360,7 @@ class TranslationDrawer:
             if 'face' in locals():
                 del face
 
-    def draw_translations(self,font_config_path, box_expansion=0, auto_expand=False, min_text_size=16, base_font_location="fonts/", max_text_size = 40):
+    def draw_translations(self,font_config_path, box_expansion=0, auto_expand=False, min_text_size=16, base_font_location="fonts/", max_text_size = 40, target_language="en"):
         """
         Draw translations on images with expanded text boxes
         
@@ -372,9 +427,9 @@ class TranslationDrawer:
                     try:
                         coords = translation["coords"]
                         x1, y1, x2, y2 = coords["x1"], coords["y1"], coords["x2"], coords["y2"]
-                        english_text = translation["english_text"]
+                        english_text = translation[self.convert_language_for_gemini(target_language)]
                         inside_bubble = translation["inside_bubble"]
-                        cls = translation.get("bubble_class", 6)  # Default to 6 if not specified
+                        cls = translation.get("bubble_class",5)  # Default to 6 if not specified
                         temp_face = None
                         font_path = None
 

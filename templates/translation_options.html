@@ -117,7 +117,7 @@
                                         <div class="translation-method-card card h-100" onclick="selectTranslationMethod('chatgpt')">
                                             <div class="card-body text-center">
                                                 <input type="radio" name="translation_method" value="chatgpt" id="chatgpt_radio" class="form-check-input mb-3" style="transform: scale(1.5);">
-                                                <h6 class="card-title">ChatGPT Translation</h6>
+                                                <h6 class="card-title">Google Gemini Translation</h6>
                                                 <p class="card-text text-muted small">
                                                     High-quality AI translation with context awareness
                                                 </p>
@@ -157,22 +157,58 @@
                                     <div class="row">
                                         <div class="col-md-8">
                                             <label for="chatgpt_api_key" class="form-label fw-bold">
-                                                <i class="bi bi-key-fill me-2"></i>ChatGPT API Key
+                                                <i class="bi bi-key-fill me-2"></i>Paste Series Name/URL 
                                             </label>
-                                            <input type="password" class="form-control" id="chatgpt_api_key" name="chatgpt_api_key" placeholder="Enter your OpenAI API key">
+                                            <input type="text" class="form-control" id="chatgpt_api_key" name="chatgpt_api_key" placeholder="Enter The Series Name Or URL Here">
                                         </div>
-                                        <div class="col-md-4 d-flex align-items-end">
+                                        <!-- <div class="col-md-4 d-flex align-items-end">
                                             <button type="button" class="btn btn-outline-secondary" onclick="toggleApiKeyVisibility()">
                                                 <i class="bi bi-eye" id="eye_icon"></i> Show
                                             </button>
-                                        </div>
+                                        </div> -->
                                     </div>
                                     <small class="form-text text-muted mt-2">
                                         <i class="bi bi-info-circle me-1"></i>
-                                        Your API key will be used securely and is not stored permanently.
+                                        Series Name/URL will be use as context (Optional)
                                     </small>
                                 </div>
                             </div>
+
+                            <!-- Font Size Configuration Section -->
+                            <div class="speech-bubble-config">
+                                <h5><i class="bi bi-textarea-resize me-2"></i>Font Size Limits</h5>
+                                <p class="text-muted mb-4">Set the minimum and maximum font size for text rendering</p>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="min_font_size" class="form-label fw-bold">Minimum Font Size (px)</label>
+                                        <input type="number" class="form-control" id="min_font_size" name="min_font_size" min="1" max="500" value="12" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="max_font_size" class="form-label fw-bold">Maximum Font Size (px)</label>
+                                        <input type="number" class="form-control" id="max_font_size" name="max_font_size" min="1" max="500" value="48" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Target Language Section -->
+                            <div class="mb-4">
+                                <h5 class="mb-3"><i class="bi bi-flag me-2"></i>Target Language</h5>
+                                <p class="text-muted mb-2">Choose the language to translate your comic into</p>
+                                <select class="form-select" id="target_language" name="target_language" required>
+                                    <option value="en" selected>English (en)</option>
+                                    <option value="id">Indonesian (id)</option>
+                                    <option value="es">Spanish (es)</option>
+                                    <option value="fr">French (fr)</option>
+                                    <option value="de">German (de)</option>
+                                    <option value="ko">Korean (ko)</option>
+                                    <option value="zh">Chinese (zh)</option>
+                                    <option value="th">Thai (th)</option>
+                                    <!-- Add more as needed -->
+                                </select>
+                            </div>
+
+
                             
                             <!-- Submit Section -->
                             <div class="d-grid gap-2 d-md-flex justify-content-md-end">
@@ -257,7 +293,7 @@
             const apiKeySection = document.getElementById('api_key_section');
             if (method === 'chatgpt') {
                 apiKeySection.style.display = 'block';
-                document.getElementById('chatgpt_api_key').required = true;
+                document.getElementById('chatgpt_api_key').required = false;
             } else {
                 apiKeySection.style.display = 'none';
                 document.getElementById('chatgpt_api_key').required = false;
@@ -292,15 +328,15 @@
                 return;
             }
             
-            if (selectedMethod.value === 'chatgpt') {
-                const apiKey = document.getElementById('chatgpt_api_key').value.trim();
-                if (!apiKey) {
-                    e.preventDefault();
-                    alert('Please enter your ChatGPT API key.');
-                    document.getElementById('chatgpt_api_key').focus();
-                    return;
-                }
-            }
+            // if (selectedMethod.value === 'chatgpt') {
+            //     const apiKey = document.getElementById('chatgpt_api_key').value.trim();
+            //     if (!apiKey) {
+            //         e.preventDefault();
+            //         alert('Please enter your ChatGPT API key.');
+            //         document.getElementById('chatgpt_api_key').focus();
+            //         return;
+            //     }
+            // }
             
             // Check if all fonts are selected
             const fontSelects = ['regular_font', 'thought_font', 'shout_font', 'narrator_font'];

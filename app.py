@@ -14,6 +14,14 @@ from backend.inpainting_script import InpaintingScript as inpaint
 from backend.json_to_jsonTranslate import JsonToJsonTranslate as json_translate
 from backend.draw_translation import TranslationDrawer as draw_translate
 from backend.draw_translation_refined_v2 import TranslationDrawer as draw_translate_v2
+from backend.translate_with_gemini import MangaTranslator as GeminiTranslator
+from backend.translate_with_gemini_v2 import MangaTranslator as GeminiTranslatorV2
+
+
+with open('./PROJECT_KEY(DONT_PUSH).json', 'r') as f:
+    PROJECT_STUFF = json.load(f)
+
+GEMINI_API_KEY = PROJECT_STUFF['GEMINI_KEY']
 
 
 app = Flask(__name__)
@@ -38,6 +46,22 @@ FINAL_OUTPUT_FOLDER = os.path.join(BASE_DIR, 'final_output')
 
 # Ensure upload directory exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def convert_language_for_gemini(language:str):
+    iso_map = {
+    "en": "English",
+    "id": "Indonesian",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "ko": "Korean",
+    "zh": "Chinese",
+    "th": "Thai",
+}
+
+    return iso_map.get(language.lower(), language)
+    
+
 
 def allowed_file(filename):
     """Check if the file extension is allowed."""
@@ -89,6 +113,10 @@ def extract_zip(zip_path, extract_to):
     except Exception as e:
         raise ValueError(f"Error extracting ZIP file: {str(e)}")
 
+@app.route('/')
+def index():
+    return render_template('index.html')
+
 @app.route('/preview_results/<folder>')
 def preview_results(folder):
     # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
@@ -139,7 +167,7 @@ def serve_final_output(folder, subfolder, filename):
 
     return send_from_directory(base, filename)
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/upload_files', methods=['GET', 'POST'])
 def upload_files():
     """Handle single file upload and processing."""
     
@@ -579,6 +607,11 @@ def process_translation(folder):
         method = config.get('translation_method')
         font_choices = config.get('font_choices', {})
         openai_key = config.get('openai_api_key')
+        gemini_context = config.get('gemini_context')
+        min_font_size = int(config.get('min_font_size'))
+        max_font_size = int(config.get('max_font_size'))
+        target_language = config.get('target_language')
+
 
         inpaint_output = os.path.join(output_folder, 'inpainted')
         os.makedirs(inpaint_output, exist_ok=True)
@@ -618,7 +651,7 @@ def process_translation(folder):
             os.makedirs(json_for_work_path, exist_ok=True)
             os.makedirs(json_for_final_path, exist_ok=True)
 
-            make_json_for_work = json_translate(image_folder, edited_folder, json_for_work_path)
+            make_json_for_work = json_translate(image_folder, edited_folder, json_for_work_path, language=target_language)
             # make_json_final = json_translate(image_folder, edited_folder, json_for_final_path)
             make_json_for_work.translate_and_save_json()
             # make_json_final.translate_and_save_json()
@@ -633,7 +666,7 @@ def process_translation(folder):
 
             g_method = draw_translate(inpaint_output, json_for_work_path, translated_path)
             #OLD
-            g_method.draw_translations(config_path, base_font_location="fonts/" ,auto_expand=False , min_text_size=22, max_text_size=60)
+            g_method.draw_translations(config_path, base_font_location="fonts/" ,auto_expand=False , min_text_size= min_font_size, max_text_size=max_font_size,target_language=target_language)
             # NEW    
             # g_method.draw_translations(config_path, base_font_location="fonts/", auto_expand=True, auto_font_size=True, min_text_size=22, max_text_size=28)
 
@@ -643,9 +676,35 @@ def process_translation(folder):
 
 
         elif method == 'chatgpt':
-            if not openai_key:
-                raise Exception("Missing OpenAI API key")
-            # ... call OpenAI API
+            # if not openai_key:
+            #     raise Exception("Missing OpenAI API key")
+            # # ... call OpenAI API
+            os.makedirs(json_for_work_path, exist_ok=True)
+            os.makedirs(json_for_final_path, exist_ok=True)
+
+            make_json_for_work = json_translate(image_folder, edited_folder, json_for_work_path)
+            make_json_for_work.translate_and_save_json()
+
+            # gemini_for_translate = GeminiTranslator(GEMINI_API_KEY, json_for_work_path)
+
+            # gemini_for_translate.run()
+
+            gemini_for_translate_v2 = GeminiTranslatorV2(GEMINI_API_KEY, json_for_work_path, manga_context_url=gemini_context, target_language=convert_language_for_gemini(target_language))
+            
+            gemini_for_translate_v2.run()
+
+            for filename in os.listdir(json_for_work_path):
+                if filename.endswith('.json'):
+                    src = os.path.join(json_for_work_path, filename)
+                    dst = os.path.join(json_for_final_path, filename)
+                    shutil.copy2(src,dst)
+            
+            translated_path = os.path.join(output_folder, 'translated_images')
+
+            cgpt_method = draw_translate(inpaint_output, json_for_work_path, translated_path)
+
+            cgpt_method.draw_translations(config_path, base_font_location='fonts/', auto_expand=False, min_text_size=min_font_size, max_text_size=max_font_size, target_language=target_language)
+
             pass
 
         else:
@@ -979,11 +1038,10 @@ def translation_config(folder):
     bubble_classes = {
         0: 'Ellipse',
         1: 'Cloud',
-        2: 'Other',
-        3: 'Rectangle',
-        4: 'Sea Urchin',
-        5: 'Thorn',
-        6: 'Outside'
+        2: 'Rectangle',
+        3: 'Other',
+        4: 'Thorn',
+        5: 'Outside'
     }
     return render_template('translation_options.html', folder=folder, available_fonts=fonts, bubble_classes=bubble_classes)
 
@@ -999,12 +1057,23 @@ def configure_translation(folder):
                 font_choices[cls_id] = request.form[key]
 
         translation_method = request.form.get("translation_method")
-        openai_api_key = request.form.get("chatgpt_api_key", "")
+        # openai_api_key = request.form.get("chatgpt_api_key", "") # DISABLED OPENAI_API_KEY FOR NOW
+        openai_api_key = ""
+        gemini_context = request.form.get("chatgpt_api_key", "")
+        min_font_size = int(request.form.get("min_font_size", 12))
+        max_font_size = int(request.form.get("max_font_size", 48))
+        target_language = request.form.get("target_language", "en")
+
 
         config_data = {
             "font_choices": font_choices,
             "translation_method": translation_method,
-            "openai_api_key": openai_api_key
+            "openai_api_key": openai_api_key,
+            "gemini_context": gemini_context,
+            "min_font_size" : min_font_size,
+            "max_font_size" : max_font_size,
+            "target_language" : target_language
+            
         }
 
         # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)

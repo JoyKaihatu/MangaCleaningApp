@@ -13,7 +13,8 @@ class yolo_detect:
     def __init__(self, input_folders):
         self.input_folders = input_folders
 
-        self.model_bubble = YOLO("./backend/YOLO/best_YOLOV11.pt")
+        # self.model_bubble = YOLO("./backend/YOLO/best_YOLOV11.pt")
+        self.model_bubble = YOLO("./backend/YOLO/yolov11_best_5_class.pt")
         self.model_onomatope = YOLO("./backend/YOLO/best_yoloV11Seeg.pt")
         self.model_text = YOLO("./backend/YOLO/comic-text-segmenter.pt")
 

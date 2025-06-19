@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Translation Options</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    
+    
+    
+    <style id="dynamic-font-styles">
+    /* font-face rules will be injected here */
+    </style>
+    <style>
+        /* @font-face {
+        font-family: 'CC Wild Words Roman.ttf';
+        src: url('/static/fonts/CC Wild Words Roman.ttf') format('truetype');
+        }
+
+        @font-face {
+        font-family: 'ZUDJUICE.ttf';
+        src: url('/static/fonts/ZUDJUICE.TTF') format('truetype');
+        }
+
+        @font-face {
+        font-family: 'Cute_Font.ttf';
+        src: url('/static/fonts/Cute_Font.ttf') format('truetype');
+        } */
+
+        .font-preview {
+            margin-left: 10px;
+            font-weight: bold;
+            color: #666;
+            font-size: 16px;
+        }
+        .translation-method-card {
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .translation-method-card:hover {
+            border-color: #0d6efd;
+            box-shadow: 0 4px 8px rgba(13, 110, 253, 0.1);
+        }
+        .translation-method-card.selected {
+            border-color: #0d6efd;
+            background-color: #f8f9ff;
+        }
+        .api-key-section {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #0d6efd;
+        }
+        .speech-bubble-config {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .speech-bubble-config h5 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="card-title mb-0">
+                            <i class="bi bi-gear-fill me-2"></i>
+                            Translation Configuration
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('configure_translation', folder=folder) }}" id="translationForm">
+                            <!-- Hidden folder input -->
+                            <input type="hidden" name="folder" value="{{ folder }}">
+                            
+                            <!-- Font Selection Section -->
+                           <div class="speech-bubble-config">
+                                <h5><i class="bi bi-fonts me-2"></i>Font Configuration</h5>
+                                <p class="text-muted mb-4">Select fonts for different speech bubble shapes</p>
+
+                                <div class="row">
+                                    {% for cls_id, cls_name in bubble_classes.items() %}
+                                    <div class="col-md-6 mb-3">
+                                    <label for="font_{{ cls_id }}" class="form-label fw-bold">{{ cls_name }} Bubbles</label>
+                                    <select class="form-select font-selector" id="font_{{ cls_id }}" name="font_{{ cls_id }}" data-preview="font_preview_{{ cls_id }}" required>
+                                        <option value="">Choose a font...</option>
+                                        {% for font in available_fonts %}
+                                        <option value="{{ font }}">{{ font }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="font-preview" id="font_preview_{{ cls_id }}">
+                                        Font Preview Will Appear Here
+                                    </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            
+                            <!-- Translation Method Section -->
+                            <div class="mb-4">
+                                <h5 class="mb-3"><i class="bi bi-translate me-2"></i>Translation Method</h5>
+                                <p class="text-muted mb-4">Choose how you want to translate the extracted text</p>
+                                
+                                <div class="row">
+                                    <!-- ChatGPT Option -->
+                                    <div class="col-md-4 mb-3">
+                                        <div class="translation-method-card card h-100" onclick="selectTranslationMethod('chatgpt')">
+                                            <div class="card-body text-center">
+                                                <input type="radio" name="translation_method" value="chatgpt" id="chatgpt_radio" class="form-check-input mb-3" style="transform: scale(1.5);">
+                                                <h6 class="card-title">ChatGPT Translation</h6>
+                                                <p class="card-text text-muted small">
+                                                    High-quality AI translation with context awareness
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Google Translate Option -->
+                                    <div class="col-md-4 mb-3">
+                                        <div class="translation-method-card card h-100" onclick="selectTranslationMethod('google')">
+                                            <div class="card-body text-center">
+                                                <input type="radio" name="translation_method" value="google" id="google_radio" class="form-check-input mb-3" style="transform: scale(1.5);">
+                                                <h6 class="card-title">Google Translate</h6>
+                                                <p class="card-text text-muted small">
+                                                    Fast and reliable automatic translation
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- JSON Output Option -->
+                                    <div class="col-md-4 mb-3">
+                                        <div class="translation-method-card card h-100" onclick="selectTranslationMethod('json_only')">
+                                            <div class="card-body text-center">
+                                                <input type="radio" name="translation_method" value="json_only" id="json_only_radio" class="form-check-input mb-3" style="transform: scale(1.5);">
+                                                <h6 class="card-title">JSON Export Only</h6>
+                                                <p class="card-text text-muted small">
+                                                    OCR + Google Translate data without image rendering
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- API Key Section (shown only for ChatGPT) -->
+                                <div class="api-key-section" id="api_key_section">
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <label for="chatgpt_api_key" class="form-label fw-bold">
+                                                <i class="bi bi-key-fill me-2"></i>ChatGPT API Key
+                                            </label>
+                                            <input type="password" class="form-control" id="chatgpt_api_key" name="chatgpt_api_key" placeholder="Enter your OpenAI API key">
+                                        </div>
+                                        <div class="col-md-4 d-flex align-items-end">
+                                            <button type="button" class="btn btn-outline-secondary" onclick="toggleApiKeyVisibility()">
+                                                <i class="bi bi-eye" id="eye_icon"></i> Show
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <small class="form-text text-muted mt-2">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Your API key will be used securely and is not stored permanently.
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <!-- Submit Section -->
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <button type="button" class="btn btn-secondary me-md-2" onclick="history.back()">
+                                    <i class="bi bi-arrow-left me-2"></i>Back
+                                </button>
+                                <button type="submit" class="btn btn-primary" id="submit_btn">
+                                    <i class="bi bi-check-circle me-2"></i>Configure Translation
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Font preview functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const fontSelects = document.querySelectorAll('.font-selector');
+            const dynamicStyle = document.getElementById('dynamic-font-styles');
+
+            function registerFont(fontName) {
+                const safeFontName = fontName.replace(/\s+/g, '_'); // avoid spaces
+                const fontUrl = `/static/fonts/${fontName}`;
+                const ext = fontName.split('.').pop().toLowerCase();
+                const fontType = ext === 'otf' ? 'opentype' : 'truetype';
+
+                const rule = `
+                @font-face {
+                    font-family: "${safeFontName}";
+                    src: url("${fontUrl}") format("${fontType}");
+                }
+                `;
+
+                if (!dynamicStyle.textContent.includes(safeFontName)) {
+                dynamicStyle.textContent += rule;
+                }
+
+                return safeFontName;
+            }
+
+            fontSelects.forEach(select => {
+                const previewId = select.dataset.preview;
+                const previewElem = document.getElementById(previewId);
+
+                select.addEventListener('change', function () {
+                const fontFile = this.value;
+                if (fontFile) {
+                    const registeredName = registerFont(fontFile);
+                    previewElem.style.fontFamily = `"${registeredName}"`;
+                    previewElem.textContent = `The quick brown fox jumps over the lazy dog. (${fontFile})`;
+                } else {
+                    previewElem.textContent = 'Preview will appear here...';
+                    previewElem.style.fontFamily = 'inherit';
+                }
+                });
+            });
+        });
+
+        
+        // Translation method selection
+        function selectTranslationMethod(method) {
+            // Clear all selections
+            document.querySelectorAll('.translation-method-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Clear all radio buttons
+            document.querySelectorAll('input[name="translation_method"]').forEach(radio => {
+                radio.checked = false;
+            });
+            
+            // Select the clicked method
+            const selectedCard = document.querySelector(`#${method}_radio`).closest('.translation-method-card');
+            selectedCard.classList.add('selected');
+            document.getElementById(`${method}_radio`).checked = true;
+            
+            // Show/hide API key section
+            const apiKeySection = document.getElementById('api_key_section');
+            if (method === 'chatgpt') {
+                apiKeySection.style.display = 'block';
+                document.getElementById('chatgpt_api_key').required = true;
+            } else {
+                apiKeySection.style.display = 'none';
+                document.getElementById('chatgpt_api_key').required = false;
+                document.getElementById('chatgpt_api_key').value = '';
+            }
+        }
+        
+        // Toggle API key visibility
+        function toggleApiKeyVisibility() {
+            const apiKeyInput = document.getElementById('chatgpt_api_key');
+            const eyeIcon = document.getElementById('eye_icon');
+            const button = eyeIcon.parentElement;
+            
+            if (apiKeyInput.type === 'password') {
+                apiKeyInput.type = 'text';
+                eyeIcon.className = 'bi bi-eye-slash';
+                button.innerHTML = '<i class="bi bi-eye-slash" id="eye_icon"></i> Hide';
+            } else {
+                apiKeyInput.type = 'password';
+                eyeIcon.className = 'bi bi-eye';
+                button.innerHTML = '<i class="bi bi-eye" id="eye_icon"></i> Show';
+            }
+        }
+        
+        // Form validation
+        document.getElementById('translationForm').addEventListener('submit', function(e) {
+            const selectedMethod = document.querySelector('input[name="translation_method"]:checked');
+            
+            if (!selectedMethod) {
+                e.preventDefault();
+                alert('Please select a translation method.');
+                return;
+            }
+            
+            if (selectedMethod.value === 'chatgpt') {
+                const apiKey = document.getElementById('chatgpt_api_key').value.trim();
+                if (!apiKey) {
+                    e.preventDefault();
+                    alert('Please enter your ChatGPT API key.');
+                    document.getElementById('chatgpt_api_key').focus();
+                    return;
+                }
+            }
+            
+            // Check if all fonts are selected
+            const fontSelects = ['regular_font', 'thought_font', 'shout_font', 'narrator_font'];
+            for (let selectId of fontSelects) {
+                if (!document.getElementById(selectId).value) {
+                    e.preventDefault();
+                    alert('Please select fonts for all speech bubble types.');
+                    document.getElementById(selectId).focus();
+                    return;
+                }
+            }
+        });
+        
+        // Add click handlers for radio buttons to trigger card selection
+        document.querySelectorAll('input[name="translation_method"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                selectTranslationMethod(this.value);
+            });
+        });
+    </script>
+</body>
+</html>

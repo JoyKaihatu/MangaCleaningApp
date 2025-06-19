@@ -35,7 +35,7 @@ class JsonToJsonTranslate:
         for b in bubble_boxes:
             if b["x1"] <= cx <= b["x2"] and b["y1"] <= cy <= b["y2"]:
                 return True, b["cls"]
-        return False, 6
+        return False, 5
 
     # Sort boxes top-to-bottom, right-to-left
     def sort_boxes(self,boxes, y_thresh=20):
