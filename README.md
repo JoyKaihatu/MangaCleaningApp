@@ -119,7 +119,7 @@ MIT License
 
 ## 🙏 Credits
 
-Made with ❤️ by [Joy Kaihatu](https://github.com/JoyKaihatu)
+Made by [Joy Kaihatu](https://github.com/JoyKaihatu)
 
 YOLO model training, OCR integration, FreeType rendering, and full-stack architecture designed and built from scratch as part of a university thesis.
 
