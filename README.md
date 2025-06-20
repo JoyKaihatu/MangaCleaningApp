@@ -2,8 +2,6 @@
 
 **MangaCleaningApp** is a Flask-based web application that automatically translates Japanese manga or comic pages into English (or other languages). It combines speech bubble detection, text extraction, inpainting, translation, and text re-rendering into a complete end-to-end pipeline.
 
-![Screenshot Placeholder](https://github.com/JoyKaihatu/MangaCleaningApp/assets/your_screenshot.png)
-
 ---
 
 ## ✨ Features
