@@ -16,6 +16,12 @@
           <strong>Processing complete!</strong> Your translated output is ready.
         </div>
         <a href="{{ url_for('download_result_zip', filename=zip_filename) }}" class="btn btn-success">Download Output ZIP</a>
+
+        <div class="mt-4 text-center">
+          <a href="https://forms.gle/vEw2KBiLRhE4g1V2A" target="_blank" class="btn btn-outline-primary">
+            📝 Fill Out Our Survey
+          </a>
+        </div>
       {% elif status == 'processing' %}
         <div class="alert alert-info">
           <p>Translation in progress... this page will refresh every 10s.</p>

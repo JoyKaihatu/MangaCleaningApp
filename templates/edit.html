@@ -410,6 +410,36 @@
         document.getElementById('konva-container').addEventListener('wheel', e => e.preventDefault(), { passive: false });
 
 
+        function updateToolAvailability() {
+            const rectBtn = document.getElementById('rectangle-tool');
+            const polyBtn = document.getElementById('polygon-tool');
+
+            if (currentLabel === 'bubble') {
+                rectBtn.disabled = false;
+                polyBtn.disabled = true;
+
+                // ✅ Automatically switch to rectangle tool
+                currentTool = 'rectangle';
+                document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+                rectBtn.classList.add('active');
+
+            } else if (currentLabel === 'onomatope' || currentLabel === 'text') {
+                rectBtn.disabled = true;
+                polyBtn.disabled = false;
+
+                // ✅ Automatically switch to polygon tool
+                currentTool = 'polygon';
+                document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+                polyBtn.classList.add('active');
+
+            } else {
+                // Optional fallback — enable both, don't change current tool
+                rectBtn.disabled = false;
+                polyBtn.disabled = false;
+            }
+        }
+
+
         // function initializeCanvas() {
         //     const container = document.getElementById('konva-container');
         //     const containerWidth = container.parentElement.clientWidth - 40;
@@ -1863,6 +1893,7 @@
                     this.classList.add('selected');
                     currentLabel = this.dataset.label;
                     document.getElementById('current-label').textContent = this.querySelector('strong').textContent;
+                     updateToolAvailability();
                 });
             });
 

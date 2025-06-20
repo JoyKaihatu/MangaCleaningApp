@@ -583,6 +583,13 @@ def process_translation(folder):
     json_for_final_path = os.path.join(output_folder, 'translated_json')
     os.makedirs(output_folder, exist_ok=True)
     os.makedirs(edited_folder, exist_ok=True)
+    progress_path = os.path.join(session_folder, 'preview_progress.json')
+    with open(progress_path, 'w') as f:
+        json.dump({
+            "inpainting": False,
+            "translating": False,
+            "rendering": False
+        }, f)
 
     # ✅ 1. Write status: processing
     # with open(status_path, 'w') as f:
@@ -622,6 +629,13 @@ def process_translation(folder):
         print("INPAINTING MODEL CONFIG SET")
         inpaint_model.run_inpainting()
         print("INPAINTING DONE")
+        with open(progress_path, 'r') as f:
+            progress = json.load(f)
+
+        progress["inpainting"] = True
+
+        with open(progress_path, 'w') as f:
+            json.dump(progress, f)
 
         # ✅ 4. Handle each method
         if method == 'json_only':
@@ -636,6 +650,14 @@ def process_translation(folder):
             make_json_for_work = json_translate(image_folder, edited_folder, json_for_work_path)
             # make_json_final = json_translate(image_folder, edited_folder, json_for_final_path)
             make_json_for_work.translate_and_save_json()
+            with open(progress_path, 'r') as f:
+                progress = json.load(f)
+
+            progress["translating"] = True
+            progress["rendering"] = True
+
+            with open(progress_path, 'w') as f:
+                json.dump(progress, f)
             # make_json_final.translate_and_save_json()
 
             for filename in os.listdir(json_for_work_path):
@@ -654,6 +676,13 @@ def process_translation(folder):
             make_json_for_work = json_translate(image_folder, edited_folder, json_for_work_path, language=target_language)
             # make_json_final = json_translate(image_folder, edited_folder, json_for_final_path)
             make_json_for_work.translate_and_save_json()
+            with open(progress_path, 'r') as f:
+                progress = json.load(f)
+
+            progress["translating"] = True
+
+            with open(progress_path, 'w') as f:
+                json.dump(progress, f)
             # make_json_final.translate_and_save_json()
 
             for filename in os.listdir(json_for_work_path):
@@ -667,6 +696,13 @@ def process_translation(folder):
             g_method = draw_translate(inpaint_output, json_for_work_path, translated_path)
             #OLD
             g_method.draw_translations(config_path, base_font_location="fonts/" ,auto_expand=False , min_text_size= min_font_size, max_text_size=max_font_size,target_language=target_language)
+            with open(progress_path, 'r') as f:
+                progress = json.load(f)
+
+            progress["rendering"] = True
+
+            with open(progress_path, 'w') as f:
+                json.dump(progress, f)            
             # NEW    
             # g_method.draw_translations(config_path, base_font_location="fonts/", auto_expand=True, auto_font_size=True, min_text_size=22, max_text_size=28)
 
@@ -698,12 +734,27 @@ def process_translation(folder):
                     src = os.path.join(json_for_work_path, filename)
                     dst = os.path.join(json_for_final_path, filename)
                     shutil.copy2(src,dst)
+            with open(progress_path, 'r') as f:
+                progress = json.load(f)
+
+            progress["translating"] = True
+
+            with open(progress_path, 'w') as f:
+                json.dump(progress, f)
             
             translated_path = os.path.join(output_folder, 'translated_images')
 
             cgpt_method = draw_translate(inpaint_output, json_for_work_path, translated_path)
 
             cgpt_method.draw_translations(config_path, base_font_location='fonts/', auto_expand=False, min_text_size=min_font_size, max_text_size=max_font_size, target_language=target_language)
+
+            with open(progress_path, 'r') as f:
+                progress = json.load(f)
+
+            progress["rendering"] = True
+
+            with open(progress_path, 'w') as f:
+                json.dump(progress, f)
 
             pass
 
@@ -1110,6 +1161,16 @@ def preview_status(folder):
     # status_path = os.path.join(app.config['UPLOAD_FOLDER'], folder, 'status.json')
     status_path = os.path.join(UPLOAD_FOLDER, folder, 'status.json')
 
+    progress_path = os.path.join(UPLOAD_FOLDER, folder, 'preview_progress.json')
+
+    # Default values
+    status = "processing"
+    stage_data = {
+        "inpainting": False,
+        "translating": False,
+        "rendering": False
+    }
+
     if os.path.exists(status_path):
         try:
             with open(status_path, 'r') as f:
@@ -1119,10 +1180,18 @@ def preview_status(folder):
     else:
         status = "processing"
 
+        # Read progress stages if available
+    if os.path.exists(progress_path):
+        try:
+            with open(progress_path, 'r') as f:
+                stage_data = json.load(f)
+        except:
+            pass
+
     if status == "done":
         return redirect(url_for('preview_results', folder=folder))
     else:
-        return render_template('preview_status.html', folder=folder)
+        return render_template('preview_status.html', folder=folder, stage_data=stage_data)
 
 
 
@@ -1241,4 +1310,4 @@ def handle_exception(e):
     return redirect(url_for('upload_files'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
