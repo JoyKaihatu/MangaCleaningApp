@@ -1,0 +1,23 @@
+flask
+opencv-python
+numpy
+Pillow
+matplotlib
+scikit-image
+tqdm
+imageio
+pyyaml
+requests
+flask-cors
+gunicorn
+
+# For YOLOv5 or YOLOv11-style detection (if used)
+torch
+torchvision
+
+# For inpainting using LaMa (common tool)
+einops
+omegaconf
+
+# Optional, if using segmentation masks or image transformations
+albumentations
