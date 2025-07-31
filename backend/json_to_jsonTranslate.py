@@ -103,8 +103,11 @@ class JsonToJsonTranslate:
                 try:
                     pil_img = Image.fromarray(cropped)
                     jp_text = self.ocr(pil_img)
+                    print("jp_text: ",jp_text)
                     en_text = self.translator_en.translate(jp_text)
+                    print("eng_text_1 : ",en_text)
                     en_text = self.shorten_repetitive_words(en_text, 3)
+                    print("en_text_2: ",en_text)
                     
                     inside_bubble, cls = self.is_inside_bubble(x1, y1, x2, y2, bubble_boxes)
                     

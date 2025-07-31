@@ -8,7 +8,6 @@ import freetype
 from tqdm import tqdm
 from collections import defaultdict
 import re
-from PIL import Image, ImageDraw, ImageFont
 
 # Paths
 # inpainted_folder = './output_inpaint_zeitaku_7'
@@ -54,50 +53,11 @@ class TranslationDrawer:
         # Regex: match word optionally with apostrophe/hyphen + glued punctuation
         # tokens = re.findall(r"[a-zA-Z0-9]+(?:['-][a-zA-Z0-9]+)*[.,!?…]*", text)
         # r"[a-zA-Z0-9]+(?:['-][a-zA-Z0-9]+)*[.,!?…]*|\.{3,}|[.,!?…]"
-        tokens = re.findall(r"([\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AFa-zA-Z0-9]+(?:['-'][a-zA-Z0-9]+)*[.,!?…]*|\.{3,}|[.,!?…])", text)
+        tokens = re.findall(r"([\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AFa-zA-Z0-9]+(?:['-][a-zA-Z0-9]+)*[.,!?…]*|\.{3,}|[.,!?…])", text)
 
         return tokens
 
-    def smart_split(self, text):
-        """
-        Splits translated text into tokens for better wrapping.
-        Handles:
-        - Splits hyphenated suffixes (e.g., 'Natsume-kun' → ['Natsume', '-kun'])
-        - Keeps punctuation (.,!?) glued to the word before it
-        - Normalizes and separates ellipses
-        """
-        # Normalize all types of ellipses like ". . ." to "..."
-        text = re.sub(r"(?:\s*\.\s*){3,}", "...", text)
-
-        raw_tokens = text.strip().split()
-        final_tokens = []
-
-        for token in raw_tokens:
-            if token == '...':
-                final_tokens.append('...')
-                continue
-
-            # Match word + glued punctuation
-            match = re.match(
-                r"([\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AFa-zA-Z0-9]+(?:'[a-zA-Z0-9]+)?(?:[.,!?…]+)?)",
-                token
-            )
-            if match:
-                word = match.group(1)
-
-                # Handle hyphenated suffixes like 'Natsume-kun'
-                if '-' in word and not word.startswith('-') and not word.endswith('-'):
-                    parts = word.split('-', 1)
-                    final_tokens.append(parts[0])
-                    final_tokens.append('-' + parts[1])
-                else:
-                    final_tokens.append(word)
-            else:
-                final_tokens.append(token)
-
-        return final_tokens
-
-    def smart_split_3(self,text):
+    def smart_split(self,text):
         """
         Splits translated text into tokens for better wrapping.
         Handles:
@@ -221,39 +181,7 @@ class TranslationDrawer:
         
         return mask
 
-    def calculate_font_size(self,text, font_path, max_width, max_height, min_size=10, max_size=100):
-        text = self.smart_split(text=text)
-        best_size = min_size
-        for size in range(min_size, max_size + 1):
-            font = ImageFont.truetype(font_path, size)
-            bbox = font.getbbox(text)
-            width = bbox[2] - bbox[0]
-            height = bbox[3] - bbox[1]
-            if width <= max_width and height <= max_height:
-                best_size = size
-            else:
-                break
-        return best_size
-    
-    def draw_text_on_image_PIL(self, image, text, box, font_path, min_font_size=10, max_font_size=100):
-        draw = ImageDraw.Draw(image)
-        # font_path = pick_font(text, fonts_folder)
-        font_size = self.calculate_font_size(text, font_path, box[2], box[3], min_font_size, max_font_size)
-        font = ImageFont.truetype(font_path, font_size)
-
-        text_bbox = font.getbbox(text)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
-
-        x = box[0] + (box[2] - text_width) // 2
-        y = box[1] + (box[3] - text_height) // 2
-
-        draw.text((x, y), text, font=font, fill="black", stroke_width=2, stroke_fill="white")
-        print(font_size)
-
-        return image
-
-    def draw_text_on_image_freetype(self, img, text, x1, y1, x2, y2, inside_bubble, bubble_mask=None, box_expansion=0, font_path="./fonts/CC Wild Words Roman.ttf", min_text_size = 12, max_text_size = 40, smart_split = True):
+    def draw_text_on_image_freetype(self, img, text, x1, y1, x2, y2, inside_bubble, bubble_mask=None, box_expansion=0, font_path="./fonts/CC Wild Words Roman.ttf", min_text_size = 12, max_text_size = 40, smart_split = False):
         # Apply box expansion to the coordinates
         x1 = max(0, x1 - box_expansion)
         y1 = max(0, y1 - box_expansion)
@@ -332,13 +260,13 @@ class TranslationDrawer:
             def wrap_text_freetype(text, font_size, smarts_split = True):
                 face.set_char_size(font_size * 48)
 
-                # if not smarts_split:
-                #     #OLD SPLIT
-                #     # words = text.split()
-                #     words = self.smart_split_2(text)
-                # else:
-                #     #NEW SPLIT
-                words = self.smart_split(text)
+                if not smarts_split:
+                    #OLD SPLIT
+                    # words = text.split()
+                    words = self.smart_split_2(text)
+                else:
+                    #NEW SPLIT
+                    words = self.smart_split(text)
 
 
                 lines = []
@@ -364,7 +292,7 @@ class TranslationDrawer:
             reduced_max_height = max_height - stroke_width * 2
 
             for size in range(min_text_size, max_text_size + 1, 1):
-                lines = wrap_text_freetype(text, size, smart_split)
+                lines = wrap_text_freetype(text, size)
                 face.set_char_size(size * 48)
                 line_height = face.size.height >> 6
                 total_height = len(lines) * (line_height + line_spacing) - line_spacing
@@ -435,7 +363,7 @@ class TranslationDrawer:
             if 'face' in locals():
                 del face
 
-    def draw_translations(self,font_config_path, box_expansion=0, auto_expand=False, min_text_size=16, base_font_location="fonts/", max_text_size = 40, target_language="en", PIL_flag=False):
+    def draw_translations(self,font_config_path, box_expansion=0, auto_expand=False, min_text_size=16, base_font_location="fonts/", max_text_size = 40, target_language="en"):
         """
         Draw translations on images with expanded text boxes
         
@@ -547,31 +475,24 @@ class TranslationDrawer:
                                 current_expansion = max(0, current_expansion - 5)
                                 print("Overlapping detected, reducing expansion to", current_expansion)
                             
-                            if PIL_flag:
-                                PIL_image = Image.open(inpainted_path).convert("RGBA")
-                                output_image = self.draw_text_on_image_PIL(PIL_image, english_text, [x1,y1,x2,y2], font_path=font_path, min_font_size=min_text_size, max_font_size=max_text_size)
-                            else:
-                                self.draw_text_on_image_freetype(
-                                    inpainted_img, 
-                                    english_text, 
-                                    x1, y1, x2, y2, 
-                                    inside_bubble,
-                                    bubble_mask=bubble_mask if inside_bubble else None,
-                                    box_expansion=current_expansion,
-                                    font_path=font_path,
-                                    min_text_size=min_text_size,
-                                    max_text_size=max_text_size
-                                )
+                            self.draw_text_on_image_freetype(
+                                inpainted_img, 
+                                english_text, 
+                                x1, y1, x2, y2, 
+                                inside_bubble,
+                                bubble_mask=bubble_mask if inside_bubble else None,
+                                box_expansion=current_expansion,
+                                font_path=font_path,
+                                min_text_size=min_text_size,
+                                max_text_size=max_text_size
+                            )
                             print(f"Drew text: {english_text}")
                     except Exception as e:
                         print(f"Error drawing text: {e}")
 
                 # Save the output image
                 output_path = os.path.join(self.output_folder, image_filename)
-                if PIL_flag:
-                    output_image.save(output_path)
-                else:
-                    cv2.imwrite(output_path, inpainted_img)
+                cv2.imwrite(output_path, inpainted_img)
                 print(f"Saved image with translations to {output_path}")
         finally:
             # Clean up the FreeType face when done

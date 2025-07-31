@@ -7,6 +7,9 @@ import shutil
 from threading import Thread
 import shutil
 import zipfile
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from backend.mask_maker import MaskMaker as make_mask
 from backend.yolo_detection import yolo_detect as y  # Import your YOLO detection module
@@ -18,11 +21,10 @@ from backend.translate_with_gemini import MangaTranslator as GeminiTranslator
 from backend.translate_with_gemini_v2 import MangaTranslator as GeminiTranslatorV2
 
 
-with open('./PROJECT_KEY(DONT_PUSH).json', 'r') as f:
-    PROJECT_STUFF = json.load(f)
+# with open('./PROJECT_KEY(DONT_PUSH).json', 'r') as f:
+#     PROJECT_STUFF = json.load(f)
 
-GEMINI_API_KEY = PROJECT_STUFF['GEMINI_KEY']
-
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Change this to a secure secret key
@@ -571,6 +573,7 @@ def reset_annotations(folder, image):
 @app.route('/process_translation/<folder>', methods=['POST'])
 def process_translation(folder):
     # session_folder = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+    pil_flag = False
     session_folder = os.path.join(UPLOAD_FOLDER, folder)
     edited_folder = os.path.join(session_folder, 'edited')
     bbox_folder = os.path.join(session_folder, 'bbox')
@@ -618,6 +621,10 @@ def process_translation(folder):
         min_font_size = int(config.get('min_font_size'))
         max_font_size = int(config.get('max_font_size'))
         target_language = config.get('target_language')
+        PIL_font_pool = ["zh","ko"]
+
+        if target_language in PIL_font_pool:
+            pil_flag = True
 
 
         inpaint_output = os.path.join(output_folder, 'inpainted')
@@ -745,8 +752,10 @@ def process_translation(folder):
             translated_path = os.path.join(output_folder, 'translated_images')
 
             cgpt_method = draw_translate(inpaint_output, json_for_work_path, translated_path)
+            
+            
 
-            cgpt_method.draw_translations(config_path, base_font_location='fonts/', auto_expand=False, min_text_size=min_font_size, max_text_size=max_font_size, target_language=target_language)
+            cgpt_method.draw_translations(config_path, base_font_location='fonts/', auto_expand=False, min_text_size=min_font_size, max_text_size=max_font_size, target_language=target_language, PIL_flag=pil_flag)
 
             with open(progress_path, 'r') as f:
                 progress = json.load(f)
@@ -997,10 +1006,9 @@ def convert_yolo_to_editor_format(yolo_data):
     bubble_cls_map = {
         0: 'Ellipse',
         1: 'Cloud',
-        2: 'Other',
-        3: 'Rectangle',
-        4: 'Sea Urchin',
-        5: 'Thorn'
+        2: 'Rectangle',
+        3: 'Other',
+        4: 'Thorn',
     }
 
     for label_type in ['onomatope', 'bubble', 'text']:
@@ -1310,4 +1318,4 @@ def handle_exception(e):
     return redirect(url_for('upload_files'))
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    app.run(debug=True)
