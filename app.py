@@ -8,7 +8,7 @@ from threading import Thread
 import shutil
 import zipfile
 from dotenv import load_dotenv
-
+from waitress import serve
 load_dotenv()
 
 from backend.mask_maker import MaskMaker as make_mask
@@ -1318,4 +1318,4 @@ def handle_exception(e):
     return redirect(url_for('upload_files'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    serve(app, host="0.0.0.0", port=5000)
